@@ -27,6 +27,7 @@ build-backend = "poetry.core.masonry.api"
 python = "^3.10"
 typing-extensions = "^4.1.1"
 phonenumbers = "^8.12.51"
+redis = "^4.3.4"
 
 
 [tool.poetry.dev-dependencies]
