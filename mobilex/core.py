@@ -5,7 +5,7 @@ from .utils import ArgumentVector
 
 
 if t.TYPE_CHECKING:
-    from .sessions import Session
+    from .sessions import Session, SessionManager
 
 
 class Request:
@@ -35,23 +35,24 @@ class Response(object):
 class FlexUssd(object):
 
     router: UssdRouter
-
+    session_manager: 'SessionManager'
+    
     def __init__(self, *, session_manager):
         self.session_manager = session_manager
-        self.session_manager.app = self
         self.has_booted = False
-        # self._routers = {}
 
     @property
     def config(self):
         from .settings import ussd_settings
         return ussd_settings
 
-    def run(self):
+    async def run(self):
         assert not self.has_booted, (
             f'{self.__class__.__name__}.boot() called multiple times.'
         )
 
+        sm = self.session_manager
+        await sm.setup(self)
         self.router.run_embeded(self)
         
         self.has_booted = True

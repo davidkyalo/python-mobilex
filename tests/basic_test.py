@@ -8,20 +8,17 @@ from mobilex.screens.base import UssdScreen, END
 from mobilex import FlexUssd, Request
 from mobilex.router import UssdRouter
 from mobilex.sessions import SessionManager
-from mobilex.cache.redis import RedisCache
+from mobilex.cache.dict import DictCache
 from mobilex.response import redirect
 
 
 async def basic_test():
     
 
-    cache = RedisCache()
-    await cache.setup()
+    cache = DictCache()
 
 
-    app = FlexUssd(
-        session_manager=SessionManager(cache),
-    )
+    app = FlexUssd(session_manager=SessionManager(cache))
 
     router = UssdRouter('test')
 
@@ -39,7 +36,7 @@ async def basic_test():
             return END
 
     app.include_router(router)
-    app.run()
+    await app.run()
 
     req = Request('123456')
 
