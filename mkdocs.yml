@@ -6,7 +6,7 @@ theme:
 
 repo_name: davidkyalo/python-mobilex
 repo_url: https://github.com/davidkyalo/python-mobilex
-edit_uri: "blob/master/docs/"
+edit_uri: "blob/main/docs/"
 
 
 markdown_extensions:
