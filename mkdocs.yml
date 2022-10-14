@@ -1,0 +1,35 @@
+site_name: Python Mobilex
+theme:
+  name: material
+  custom_dir: docs/override
+
+
+repo_name: davidkyalo/python-mobilex
+repo_url: https://github.com/davidkyalo/python-mobilex
+edit_uri: "blob/master/docs/"
+
+
+markdown_extensions:
+  - pymdownx.highlight
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - attr_list
+  - md_in_html
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+extra:
+  version:
+    provider: mike
+
+plugins:
+  - mike:
+      version_selector: true
+      css_dir: css             # the directory to put the version selector's CSS
+      javascript_dir: js       # the directory to put the version selector's JS
+      canonical_version: null  # the version for <link rel="canonical">; `null`
+                               # uses the version specified via `mike deploy`
+  - search:
