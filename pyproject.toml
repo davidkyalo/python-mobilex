@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "mobilex"
-version = "0.0.0"
+version = "0.0.1"
 description = "USSD and SMS exchange framework"
 authors = ["David Kyalo <davidmkyalo@gmail.com>"]
 license = "MIT"
