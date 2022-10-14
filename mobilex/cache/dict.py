@@ -2,7 +2,6 @@ import asyncio
 import typing as t
 
 from datetime import timedelta
-import redis.asyncio as redis
 
 try:
     from cachetools import TTLCache    
