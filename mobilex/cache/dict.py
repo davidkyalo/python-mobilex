@@ -5,7 +5,7 @@ from datetime import timedelta
 
 try:
     from cachetools import TTLCache    
-except ImportError:
+except ImportError: # pragma: no cover
     raise ImportError(
         f"{__name__!r} requires 'cachetools' installed. `pip install cachetools`"
     )
