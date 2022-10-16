@@ -89,12 +89,12 @@ class Proxy(Generic[_T]):
         except AttributeError:
             return self._get_current_object().__name__
 
-    @_default_cls_attr('qualname', str, __name__)
-    def __qualname__(self):
-        try:
-            return self.__custom_name__
-        except AttributeError:
-            return self._get_current_object().__qualname__
+    # @_default_cls_attr('qualname', str, __qualname__)
+    # def __qualname__(self):
+    #     try:
+    #         return self.__custom_name__
+    #     except AttributeError:
+    #         return self._get_current_object().__qualname__
 
     @_default_cls_attr('module', str, __module__)
     def __module__(self):
@@ -167,12 +167,6 @@ class Proxy(Generic[_T]):
         def __delitem__(self, key):
             del self._get_current_object()[key]
 
-        def __setslice__(self, i, j, seq):
-            self._get_current_object()[i:j] = seq
-
-        def __delslice__(self, i, j):
-            del self._get_current_object()[i:j]
-
         def __setattr__(self, name, value):
             setattr(self._get_current_object(), name, value)
 
@@ -217,9 +211,6 @@ class Proxy(Generic[_T]):
 
         def __contains__(self, i):
             return i in self._get_current_object()
-
-        def __getslice__(self, i, j):
-            return self._get_current_object()[i:j]
 
         def __add__(self, other):
             return self._get_current_object() + other
@@ -350,7 +341,7 @@ class PromiseProxy(Proxy[_T]):
                              '_Proxy__kwargs')):
         try:
             thing = Proxy._get_current_object(self)
-        except Exception:
+        except Exception:  # pragma: no cover 
             raise
         else:
             _object_setattr(self, '__thing', thing)

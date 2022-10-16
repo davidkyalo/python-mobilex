@@ -12,7 +12,7 @@ from mobilex.cache.dict import DictCache
 from mobilex.response import redirect
 
 
-async def basic_test():
+async def test_basic():
     
 
     cache = DictCache()

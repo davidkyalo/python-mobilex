@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "mobilex"
-version = "0.0.1"
+version = "0.0.2"
 description = "USSD and SMS exchange framework"
 authors = ["David Kyalo <davidmkyalo@gmail.com>"]
 license = "MIT"
@@ -53,10 +53,10 @@ asyncio_mode="auto"
 log_level = "DEBUG"
 
 # Glob-style pattern(s) for matching the test modules.
-python_files = "tests.py *_test.py *_tests.py"
+python_files = "tests.py test_*.py *_test.py *_tests.py"
 
 #Pattern for matching test classes
-python_classes = "*Test *Tests"
+python_classes = "*Test *Tests *_test test_*"
 python_functions = "*_test test_*"
 
 
