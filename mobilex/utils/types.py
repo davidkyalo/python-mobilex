@@ -1,6 +1,7 @@
 import typing as t
 from collections import abc
 from copy import deepcopy
+from typing import Any
 
 from typing_extensions import Self
 
@@ -15,12 +16,10 @@ _object_setattr = object.__setattr__
 
 
 class FallbackDict(dict[_T_Key, _T_Val]):
-
     __slots__ = ()
 
     def __missing__(self, key):
         return None
-
 
 
 class ReadonlyDict(dict[_T_Key, _T_Val]):
@@ -93,24 +92,31 @@ class FrozenDict(ReadonlyDict[_T_Key, _T_Val]):
         return (*((k, self[k]) for k in sorted(self)),)
 
 
-
-
-class FrozenAttributeMapping(abc.Mapping[_T_Key, _T_Val]):
+class FrozenNamespaceDict(abc.Mapping[_T_Key, _T_Val]):
     """Provides mapping access to object attributes."""
 
-    __slots__ = '__dict__',
+    __slots__ = ("__dict__", "__weakref__")
+
+    def __init__(self, *args, **kwds) -> None:
+        self.__dict__.update(*args, **kwds)
 
     def __len__(self) -> int:
-        return len(getattr(self, "__dict__", "-"))
+        return len(getattr(self, "__dict__", ""))
+
+    def __bool__(self) -> int:
+        return not not getattr(self, "__dict__", "")
 
     def __contains__(self, o: _T_Key) -> bool:
         return hasattr(self, o)
+
+    def __dir__(self) -> abc.Iterable[str]:
+        return iter(self.__dict__)
 
     def __iter__(self):
         return iter(self.__dict__)
 
     def __json__(self):
-        return dict(self)
+        return vars(self)
 
     def __getitem__(self, k: _T_Key) -> _T_Val:
         try:
@@ -118,14 +124,22 @@ class FrozenAttributeMapping(abc.Mapping[_T_Key, _T_Val]):
         except AttributeError:
             return self.__missing__(k)
 
+    def __setattr__(self, name: str, value: Any) -> None:
+        raise AttributeError(
+            f"cannot set attribute {name!r} on {self.__class__.__name__!r}"
+        )
+
     def __missing__(self, key: _T_Key):
         raise KeyError(key)
 
 
-class AttributeMapping(FrozenAttributeMapping[_T_Key, _T_Val], abc.MutableMapping[_T_Key, _T_Val]):
-
+class NamespaceDict(
+    FrozenNamespaceDict[_T_Key, _T_Val], abc.MutableMapping[_T_Key, _T_Val]
+):
     __slots__ = ()
     _pos_args: t.ClassVar[tuple[str]] = ()
+
+    __setattr__ = object.__setattr__
 
     def __init__(self, *args, **kwds) -> None:
         (args or kwds) and self.update(*args, **kwds)

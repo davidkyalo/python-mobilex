@@ -14,47 +14,43 @@ import six
 from importlib import import_module
 
 
-
-_USER_SETTINGS_KEY = 'USSD'
+_USER_SETTINGS_KEY = "USSD"
 
 
 DEFAULTS = dict(
     # SESSION_BACKEND = 'flex.ussd.sessions.SessionManager',
-    SESSION_MANAGER = 'flex.ussd.sessions.SessionManager',
-    SESSION_KEY_PREFIX = 'ussd_session',
-    SESSION_TIMEOUT = 30,
-    URLS = (),
-    DEFAULT_HTTP_METHODS = 'GET',
-    START_SCREEN = None,
-    HOME_SCREEN = None,
-    SCREEN_STATE_LIFETIMES = 60,
-    MAX_PAGE_LENGTH=182,
+    SESSION_MANAGER="flex.ussd.sessions.SessionManager",
+    session_key_prefix="ussd_session",
+    session_timeout=30,
+    URLS=(),
+    DEFAULT_HTTP_METHODS="GET",
+    START_SCREEN=None,
+    HOME_SCREEN=None,
+    screen_state_timeout=60,
+    max_page_length=182,
     # SCREEN_UID_LEN=2,
     # HISTORY_STATE_X = 16
 )
 
 
 # List of settings that may be in string import notation.
-IMPORT_STRINGS = (
-    'SESSION_MANAGER',
-)
+IMPORT_STRINGS = ("SESSION_MANAGER",)
 
 
 VALUE_PARSERS = dict(
-    URLS = lambda v: normalize_urls(v),
-    DEFAULT_HTTP_METHODS = lambda v: ensure_list(v, str_split=True)
+    URLS=lambda v: normalize_urls(v),
+    DEFAULT_HTTP_METHODS=lambda v: ensure_list(v, str_split=True),
 )
 
 
 VALUE_CHECKS = dict(
-    START_SCREEN = lambda v: v is not None,
-    SCREEN_STATE_LIFETIMES = lambda v: v >= 2
+    START_SCREEN=lambda v: v is not None, screen_state_timeout=lambda v: v >= 2
 )
 
 
 # List of settings that have been removed
 REMOVED_SETTINGS = (
-#
+    #
 )
 
 
@@ -74,8 +70,8 @@ def ensure_list(val, str_split=None):
 def normalize_urls(urls):
     if not isinstance(urls, (tuple, list)):
         raise ValueError(
-            'USSD.URLS setting value must be a list or tuple. %s given.'\
-            % type(urls))
+            "USSD.URLS setting value must be a list or tuple. %s given." % type(urls)
+        )
 
     defaults = dict(path=None, methods=ussd_settings.DEFAULT_HTTP_METHODS)
     rv = []
@@ -86,24 +82,22 @@ def normalize_urls(urls):
 
         if not isinstance(url, dict):
             raise ValueError(
-                'Items of USSD.URLS setting must be str or dict. %s given.'\
-                % type(url)
+                "Items of USSD.URLS setting must be str or dict. %s given." % type(url)
             )
 
-        for k,v in defaults.items():
+        for k, v in defaults.items():
             url.setdefault(k, v)
 
-        if not url['path'] or not isinstance(url['path'], str):
+        if not url["path"] or not isinstance(url["path"], str):
             raise ValueError(
-                'USSD.URLS[][\'path\'] setting must be str (regex pattern). %s given.'\
-                % type(url['path'])
+                "USSD.URLS[]['path'] setting must be str (regex pattern). %s given."
+                % type(url["path"])
             )
 
-        url['methods'] = ensure_list(url['methods'], str_split=True)
+        url["methods"] = ensure_list(url["methods"], str_split=True)
 
         rv.append(url)
     return rv
-
 
 
 def perform_import(val, setting_name):
@@ -126,12 +120,17 @@ def import_from_string(val, setting_name):
     """
     try:
         # Nod to tastypie's use of importlib.
-        parts = val.split('.')
-        module_path, class_name = '.'.join(parts[:-1]), parts[-1]
+        parts = val.split(".")
+        module_path, class_name = ".".join(parts[:-1]), parts[-1]
         module = import_module(module_path)
         return getattr(module, class_name)
     except (ImportError, AttributeError) as e:
-        msg = "Could not import '%s' for USSD setting '%s'. %s: %s." % (val, setting_name, e.__class__.__name__, e)
+        msg = "Could not import '%s' for USSD setting '%s'. %s: %s." % (
+            val,
+            setting_name,
+            e.__class__.__name__,
+            e,
+        )
         raise ImportError(msg)
 
 
@@ -141,15 +140,22 @@ class UssdSettings(object):
     For example:
 
         from flex.ussd.settings import ussd_settings
-        print(ussd_settings.SESSION_KEY_PREFIX)
+        print(ussd_settings.session_key_prefix)
 
     Any setting with string import paths will be automatically resolved
     and return the object, rather than the string literal.
     """
-    
+
     _base_settings = SimpleNamespace()
 
-    def __init__(self, user_settings=None, defaults=None, import_strings=None, value_parsers=None, value_checks=None):
+    def __init__(
+        self,
+        user_settings=None,
+        defaults=None,
+        import_strings=None,
+        value_parsers=None,
+        value_checks=None,
+    ):
         if user_settings:
             self._user_settings = self.__check_user_settings(user_settings)
         self.defaults = defaults or DEFAULTS
@@ -159,7 +165,7 @@ class UssdSettings(object):
 
     @property
     def user_settings(self):
-        if not hasattr(self, '_user_settings'):
+        if not hasattr(self, "_user_settings"):
             self._user_settings = getattr(self._base_settings, _USER_SETTINGS_KEY, {})
         return self._user_settings
 
@@ -178,7 +184,9 @@ class UssdSettings(object):
             val = self.value_parsers[attr](val)
 
         if attr in self.value_checks and not self.value_checks[attr](val):
-            raise ValueError('Invalid value for USSD setting: %s, value %s' % (attr, val))
+            raise ValueError(
+                "Invalid value for USSD setting: %s, value %s" % (attr, val)
+            )
 
         # Coerce import strings into classes
         if attr in self.import_strings:
@@ -191,10 +199,13 @@ class UssdSettings(object):
     def __check_user_settings(self, user_settings):
         for setting in REMOVED_SETTINGS:
             if setting in user_settings:
-                raise RuntimeError("The '%s' setting has been removed. Please refer to the docs for available settings." % setting)
+                raise RuntimeError(
+                    "The '%s' setting has been removed. Please refer to the docs for available settings."
+                    % setting
+                )
         return user_settings
 
 
-ussd_settings = UssdSettings(None, DEFAULTS, IMPORT_STRINGS, VALUE_PARSERS, VALUE_CHECKS)
-
-
+# ussd_settings = UssdSettings(
+#     None, DEFAULTS, IMPORT_STRINGS, VALUE_PARSERS, VALUE_CHECKS
+# )

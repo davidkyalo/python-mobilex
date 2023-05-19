@@ -7,21 +7,19 @@ from ..utils.uri import Uri
 from .core import History, Session
 
 if t.TYPE_CHECKING:
-    from mobilex import FlexUssd
+    from mobilex import App
     from mobilex.cache.base import BaseCache
 
 
-
 class SessionManager(abc.ABC):
-
-    app: 'FlexUssd'
+    app: "App"
     session_class: t.Type[Session] = Session
 
-    def __init__(self, backend: 'BaseCache', app: 'FlexUssd' = None):
+    def __init__(self, backend: "BaseCache", app: "App" = None):
         self.app = app
-        self.backend: 'BaseCache' = backend
+        self.backend: "BaseCache" = backend
 
-    async def setup(self, app: 'FlexUssd'):
+    async def setup(self, app: "App"):
         self.app = app
         await self.backend.setup(app)
 
@@ -32,15 +30,15 @@ class SessionManager(abc.ABC):
 
     @property
     def session_ttl(self):
-        return self.app.config.SESSION_TIMEOUT
+        return self.app.config.session_timeout
 
     @property
     def key_prefix(self):
-        return self.app.config.SESSION_KEY_PREFIX
+        return self.app.config.session_key_prefix
 
     # def get_session_key(self, request):
     # 	return self.session_key_class(
-    # 			msisdn=request.msisdn, 
+    # 			msisdn=request.msisdn,
     # 			ident=str(request.session_id or '')
     # 		)
 
@@ -48,32 +46,33 @@ class SessionManager(abc.ABC):
     # 	return session.age < self.session_ttl
 
     def create_new_session(self, request) -> Session:
-        return self.session_class(
-                self.session_ttl, 
-                request.msisdn, 
-                request.session_id
-            )
+        return self.session_class(self.session_ttl, request.msisdn, request.session_id)
 
     async def get_saved_session(self, request):
         return await self.backend.get(self.make_key(request.msisdn))
 
     async def save_session(self, session, request):
-        return await self.backend.set(self.make_key(session.msisdn), session, self.session_ttl*2)
+        return await self.backend.set(
+            self.make_key(session.msisdn), session, self.session_ttl * 2
+        )
 
     async def open_session(self, request):
-        request.session = session = (await self.get_saved_session(request))\
-                or self.create_new_session(request)
-        
+        request.session = session = (
+            await self.get_saved_session(request)
+        ) or self.create_new_session(request)
+
         # if session.key != key or not self.is_alive(session):
         # 	session.restored = session.key
         # 	session.key = key
-            
+
         await session.start_request(request)
-        request.history = History(HistoryManager(self, session), session.get('_statestack'))
+        request.history = History(
+            HistoryManager(self, session), session.get("_statestack")
+        )
 
     async def close_session(self, request, response):
         session = request.session
-        session['_statestack'] = request.history.stack
+        session["_statestack"] = request.history.stack
         await session.finish_request(request)
         asyncio.create_task(self.save_session(session, request))
 
@@ -87,30 +86,29 @@ class SessionManager(abc.ABC):
         # return f'{prefix}{self.key_sep}{rv}' if prefix else rv
 
 
-
-
 class HistoryManager(object):
+    key_prefix = "state"
 
-    key_prefix = 'state'
-    
     def __init__(self, session_manager: SessionManager, session: Session):
         self.session = session
         self.session_manager = session_manager
 
     @property
     def backend(self):
-        return self.session_manager.backend	
+        return self.session_manager.backend
 
     @property
     def state_ttl(self):
         mgr = self.session_manager
-        return mgr.session_ttl * mgr.app.config.SCREEN_STATE_LIFETIMES
-    
+        return mgr.session_ttl * mgr.app.config.screen_state_timeout
+
     async def load_state(self, key):
         return await self.backend.get(self.make_key(key))
 
     async def save_state(self, key, state):
         return await self.backend.set(self.make_key(key), state, self.state_ttl)
-    
+
     def make_key(self, *parts):
-        return self.session_manager.make_key(self.session.pk, *parts, prefix=self.key_prefix)
+        return self.session_manager.make_key(
+            self.session.pk, *parts, prefix=self.key_prefix
+        )

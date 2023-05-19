@@ -7,7 +7,7 @@ import dataclasses
 from collections import namedtuple
 
 from mobilex.utils.uri import Uri
-from mobilex.utils.types import AttributeMapping
+from mobilex.utils.types import NamespaceDict
 
 
 if t.TYPE_CHECKING:
@@ -18,43 +18,46 @@ logger = logging.getLogger(__package__)
 
 @dataclasses.dataclass()
 class SessionKey:
-
-    __slots__ = 'msisdn', 'ident', #'timestamp',
+    __slots__ = (
+        "msisdn",
+        "ident",
+    )  #'timestamp',
 
     msisdn: str
     ident: str
 
     # timestamp: float = dataclasses.field(
-    # 		init=False, compare=False, 
+    # 		init=False, compare=False,
     # 		repr=False, default_factory=time.time
     # 	)
 
     # @property
     # def age(self) -> float:
     # 	return time.time() - self.timestamp
-    
+
     def __str__(self):
-        return f'{self.msisdn}/{self.ident}'
+        return f"{self.msisdn}/{self.ident}"
 
 
 class Session:
-
     restored = None
     _is_started = False
 
     @t.overload
-    def __init__(self, ttl: int, key: SessionKey): 
+    def __init__(self, ttl: int, key: SessionKey):
         ...
+
     @t.overload
-    def __init__(self, ttl: int, msisdn: str, id: t.Optional[str]=None): 
+    def __init__(self, ttl: int, msisdn: str, id: t.Optional[str] = None):
         ...
-    def __init__(self, ttl: int, key: SessionKey, id: t.Optional[str]=None):
-        isinstance(key, SessionKey) or (key := SessionKey(key, id or None))		
+
+    def __init__(self, ttl: int, key: SessionKey, id: t.Optional[str] = None):
+        isinstance(key, SessionKey) or (key := SessionKey(key, id or None))
         self.key = key
         self.ttl = ttl
         self.created_at = None
         self.accessed_at = None
-        self.data = AttributeMapping()
+        self.data = NamespaceDict()
         self.argv = None
         self.restored = None
 
@@ -84,16 +87,18 @@ class Session:
 
     @property
     def state(self):
-        return self.data.get('__state__')
+        return self.data.get("__state__")
 
     @state.setter
     def state(self, value):
-        self.data['__state__'] = value
-    
-    async def start_request(self, request, *, session_id: t.Optional[str]=...) -> t.NoReturn:
+        self.data["__state__"] = value
+
+    async def start_request(
+        self, request, *, session_id: t.Optional[str] = ...
+    ) -> t.NoReturn:
         if self._is_started:
             return self
-        
+
         session_id is ... and (session_id := request.session_id)
 
         if int(self.id is None) + int(session_id is None) == 1:
@@ -111,7 +116,7 @@ class Session:
         if self._is_started:
             del self._is_started
             self.accessed_at = time.time()
-    
+
     def reset(self):
         self.data.clear()
         self.reset_restored()
@@ -143,7 +148,7 @@ class Session:
 
     def setdefault(self, key, value):
         return self.data.setdefault(key, value)
-    
+
     def update(self, *arg, **kw):
         self.data.update(*arg, **kw)
 
@@ -165,12 +170,9 @@ class Session:
         return f'{self.__class__.__name__}("{self.key}")'
 
 
-
-
-
 class StateUri(Uri):
-    """Unique 
-    """
+    """Unique"""
+
     __slots__ = ()
 
     @property
@@ -182,31 +184,25 @@ class StateUri(Uri):
         return hashlib.md5(str(self).encode()).hexdigest()
 
 
-
-
 class History:
-
-    def __init__(self, manager: 'HistoryManager', stack: list=None):
+    def __init__(self, manager: "HistoryManager", stack: list = None):
         self.manager = manager
         self.stack = [] if stack is None else stack
 
     def __len__(self):
         return len(self.stack) + 1
-    
+
     async def pop(self, k: int = None):
         k is None and (k := -1)
-        stack = self.stack		
+        stack = self.stack
         stack[k:] = []
-        if (path := stack and stack[-1] or None):
+        if path := stack and stack[-1] or None:
             return await self.manager.load_state(path.hash)
 
     async def push(self, res):
         screen = res.to
-        prev = self.stack and self.stack[-1] or ''
+        prev = self.stack and self.stack[-1] or ""
         if not prev or prev.stem != screen:
             path = StateUri(prev, screen)
             self.stack.append(path)
             asyncio.create_task(self.manager.save_state(path.hash, res))
-
-
-

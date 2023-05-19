@@ -5,4 +5,4 @@ ussd_namespace(__name__, 'mobilex')
 
 
 
-from .core import Request, Response, FlexUssd
+from .core import Request, Response, App

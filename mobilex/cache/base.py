@@ -9,7 +9,7 @@ from mobilex.utils.uri import Uri
 
 
 if t.TYPE_CHECKING:
-    from mobilex import FlexUssd 
+    from mobilex import App 
 
 CacheKey = t.NewType('CacheKey', str)
 
@@ -105,7 +105,7 @@ class BaseCache:
     def loads(self, obj):
         return self.serializer.loads(obj)
     
-    async def setup(self, app: 'FlexUssd'):
+    async def setup(self, app: 'App'):
         pass
 
     async def add(self, key, value, timeout=..., version=None):

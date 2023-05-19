@@ -2,10 +2,10 @@ import typing as t
 
 
 
-from .base import UssdScreen
+from .base import Screen
 
 
-class UssdMenuScreen(UssdScreen):
+class UssdMenuScreen(Screen):
 
 	class Meta:
 		abstract = True

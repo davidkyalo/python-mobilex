@@ -3,6 +3,10 @@ import typing as t
 
 
 
+if t.TYPE_CHECKING:
+    from .base import Screen
+else:
+    Screen = object
 
 
 
@@ -78,5 +82,13 @@ class SyncHandleExceptionMixin:
 class SyncMixin(SyncRenderMixin, SyncHandleMixin, 
                 SyncValidateMixin, SyncHandleExceptionMixin):
     """SyncMixin doc"""
+
+
+
+class TemplateMixin(Screen):
+
+    template = None
+    template_name = None
+
 
 

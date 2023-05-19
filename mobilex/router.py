@@ -16,13 +16,13 @@ from .screens.registry import ScreenRegistry
 logger = logging.getLogger(__name__)
 
 if t.TYPE_CHECKING:
-    from . import FlexUssd, Response, Request
+    from . import App, Response, Request
 
 
 
 class UssdRouter:
 
-    parent: 'FlexUssd'
+    parent: 'App'
 
     def __init__(self, name):
         self.name = name
@@ -207,3 +207,4 @@ class UssdRouter:
         response = await self.pre_request(request)
         response is None and (response := await self.dispatch_request(request))
         return await self.post_request(request, response) or response
+

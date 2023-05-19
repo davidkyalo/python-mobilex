@@ -1,34 +1,55 @@
 import weakref
+import typing as t 
+
+if t.TYPE_CHECKING:
+    from .base import Screen
+
+
+
 
 
 class ScreenRegistry:
     """ScreenRegistry doc"""
 
-    def __init__(self, screens=None):
-        self._screens = dict() if screens is None else screens
+    __slots__ = '_screens', '_remove', '__weakref__',
 
+    _screens: dict[str, list[type['Screen']]] 
+
+    def __init__(self):
+        self._screens = dict()
+        def remove(wr: weakref.KeyedRef, selfref=weakref.ref(self)):
+            if self := selfref():
+                self._screens[wr.key].remove(wr)
+        self._remove = remove
+            
     def get(self, name, default=...):
         try:
-            if (rv := self._screens[name][-1]()) is None:
-                raise KeyError(name)
-            return rv
-        except (KeyError, IndexError):
+            return next(self._getall(name, reverse=True))
+        except KeyError:
             if default is ...:
-                raise LookupError(f'UssdScreen {name!r} not found')
+                raise LookupError(name)
             return default
+    
+    def _getall(self, name, *, reverse=False, strict=True):
+        ls = self._screens[name]
+        for yv in (r() for r in (reversed(ls) if reverse else ls)):
+            if not yv is None:
+                yield yv
+                strict = False
+        if strict:
+            raise KeyError(name)
     
     def getall(self, name, default=...):
         try:
-            if not(rv := [r() for r in self._screens[name] if r() is not None]):
-                raise KeyError(name)
-            return rv
+            return list(self._getall(name))
         except KeyError:
             if default is ...:
-                raise LookupError(f'UssdScreen {name!r} not found')
+                raise LookupError(name)
             return default
     
     def set(self, name, screen):
-        self._screens.setdefault(name, []).append(weakref.ref(screen))
+        wr = weakref.KeyedRef(screen, self._remove, name)
+        self._screens.setdefault(name, []).append(wr)
 
 
 _REGISTRY = ScreenRegistry()

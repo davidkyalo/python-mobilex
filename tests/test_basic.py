@@ -2,10 +2,10 @@
 import pytest
 import typing as t
 
-from mobilex.screens.base import UssdScreen, END
+from mobilex.screens.base import Screen, END
 
 
-from mobilex import FlexUssd, Request
+from mobilex import App, Request
 from mobilex.router import UssdRouter
 from mobilex.sessions import SessionManager
 from mobilex.cache.dict import DictCache
@@ -18,18 +18,18 @@ async def test_basic():
     cache = DictCache()
 
 
-    app = FlexUssd(session_manager=SessionManager(cache))
+    app = App(session_manager=SessionManager(cache))
 
     router = UssdRouter('test')
 
     @router.start_screen('index')
-    class Index(UssdScreen):
+    class Index(Screen):
 
         async def render(self, request: 'Request'):
             return redirect('.home')
 
     @router.screen('home')
-    class Home(UssdScreen):
+    class Home(Screen):
 
         async def render(self, request: 'Request'):
             self.print('Hello world')
