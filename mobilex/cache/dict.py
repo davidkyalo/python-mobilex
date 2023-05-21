@@ -4,8 +4,8 @@ import typing as t
 from datetime import timedelta
 
 try:
-    from cachetools import TTLCache    
-except ImportError: # pragma: no cover
+    from cachetools import TTLCache
+except ImportError:  # pragma: no cover
     raise ImportError(
         f"{__name__!r} requires 'cachetools' installed. `pip install cachetools`"
     )
@@ -14,15 +14,13 @@ except ImportError: # pragma: no cover
 from .base import BaseCache
 
 
-
 loop = asyncio.get_event_loop()
 
 
 class DictCache(BaseCache):
-    
     store: TTLCache
 
-    async def setup(self, app):
+    def setup(self, app):
         self.store = TTLCache(1024, self.default_timeout)
 
     async def add(self, key, value, timeout=..., version=None) -> bool:
@@ -60,7 +58,7 @@ class DictCache(BaseCache):
         """
         return +(not self.store.pop(self.make_key(key, version), None) is None)
 
-    async def keys(self, pattern='*', version=None) -> int:
+    async def keys(self, pattern="*", version=None) -> int:
         """
         Delete a key from the cache, failing silently.
         """

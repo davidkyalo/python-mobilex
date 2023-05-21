@@ -10,7 +10,7 @@ from .utils import ArgumentVector
 
 
 if t.TYPE_CHECKING:
-    from .sessions import Session, SessionManager
+    from .sessions import Session, SessionManager, History
 
 
 class ConfigDict(t.TypedDict, total=False):
@@ -33,6 +33,7 @@ class Request:
     args: ArgumentVector
     app: "App"
     session: "Session"
+    history: "History"
 
     msisdn: str
     session_id: t.Union[str, int] = None
@@ -95,13 +96,12 @@ class App:
             )
         self._initial_config.update(*args, **kwargs)
 
-    async def run(self):
+    def run(self):
         assert (
             not self.has_booted
         ), f"{self.__class__.__name__}.boot() called multiple times."
 
-        sm = self.session_manager
-        await sm.setup(self)
+        self.session_manager.setup(self)
         self.router.run_embeded(self)
 
         self.config

@@ -16,6 +16,9 @@ keywords = [
 classifiers = [
     "Programming Language :: Python :: 3.10",
 ]
+[tool.poetry.group.dev.dependencies]
+fakeredis = "^2.12.1"
+
 
 
 [build-system]
@@ -48,7 +51,7 @@ cachetools = "^5.2.0"
 
 
 [tool.pytest.ini_options]
-addopts = "--cov=mobilex --cov-report html --cov-config pyproject.toml"
+addopts = "--showlocals --cov=mobilex --cov-report html --cov-config pyproject.toml"
 asyncio_mode="auto"
 log_level = "DEBUG"
 python_files = "tests.py test_*.py *_test.py *_tests.py"

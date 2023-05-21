@@ -2,7 +2,7 @@ from inspect import isawaitable
 from operator import attrgetter
 import re
 import typing as t
-from collections import UserString
+from collections import UserString, abc
 from logging import getLogger
 
 
@@ -147,6 +147,26 @@ class UssdPayload(UserString):
         return self.data.strip()
 
 
+class Action(t.NamedTuple):
+    key: str
+    label: str
+    handler: str | abc.Callable = None
+    screen: str | int = None
+    context: abc.Mapping = None
+
+    def handle(self, screen: "Screen", value: str):
+        ctx = self.context or {}
+        if (to := self.screen) is not None:
+            return redirect(to, **ctx)
+        elif callable(func := self.handler):
+            return func(screen, value, **ctx)
+        elif isinstance(func, str):
+            return getattr(screen, func)(value, **ctx)
+
+    def __str__(self) -> str:
+        return f"{self.key}"
+
+
 class Screen(t.Generic[T], metaclass=ScreenType):
     # META_OPTIONS_CLASS = ScreenMetaOptions
 
@@ -162,6 +182,7 @@ class Screen(t.Generic[T], metaclass=ScreenType):
     request: "Request"
     app: "App" = property(attrgetter("request.app"))
     session: "Session" = property(attrgetter("request.session"))
+    state: ScreenState
 
     _meta: t.ClassVar[ScreenMetaOptions]
 
@@ -176,45 +197,63 @@ class Screen(t.Generic[T], metaclass=ScreenType):
         state_class = ScreenState
         payload_class = UssdPayload
 
-    nav_menu = dict(
-        [
-            ("0", ("Back", -1)),
-            ("00", ("Home", 0)),
-        ]
-    )
+    # nav_menu = dict(
+    #     [
+    #         ("0", ("Back", -1)),
+    #         ("00", ("Home", 0)),
+    #     ]
+    # )
+
+    actions = [
+        Action("0", "Back", screen=-1),
+        Action("00", "Home", screen=0),
+    ]
 
     class PaginationMenu(StrChoices):
         next = "99", "More"
         prev = "0", "Back"
 
         def __str__(self):
-            return f"{self.value}: {self.label}"
+            return f"{self.value:<2} {self.label}"
 
     def __init__(self, state):
         self.state = state
         self.payload = self.create_payload()
 
+    @t.overload
+    def print(self, *objs, sep=" ", end="\n"):
+        ...
+
     @property
     def print(self):
         return self.payload.append
+
+    @property
+    def _cached_actions(self) -> list[Action]:
+        try:
+            return self.__dict__["_cached_actions"]
+        except KeyError:
+            return self.__dict__.setdefault("_cached_actions", self.get_actions())
 
     def create_payload(self):
         # return self._meta.payload_class()
         return UssdPayload("")
 
-    def get_menu_items(self) -> list[str]:
-        if not self.nav_menu:
-            return []
-        return list((("%s: %s" % (o, i[0])) for o, i in self.nav_menu.items()))
+    def get_actions(self) -> list[Action]:
+        return self.actions or []
 
-    # async def init(self, request: 'Request', inpt=None):
-    #     pass
+    def get_action_dict(self):
+        return {str(act.key): act for act in self._cached_actions}
 
-    async def render(self):
-        raise NotImplementedError(f"{self.__class__.__name__}.render()")
+    def render_action_list(self):
+        return [f"{act.key:<2} {act.label}" for act in self._cached_actions]
 
     async def handle(self, inpt):
-        raise NotImplementedError(f"{self.__class__.__name__}.handle()")
+        if self.get_action_dict():
+            self.print("Invalid choice!")
+
+    async def render(self):
+        return
 
     # async def validate(self, request: 'Request', inpt):
     #     return inpt
@@ -259,54 +298,49 @@ class Screen(t.Generic[T], metaclass=ScreenType):
     def abort(self, *args, **kwargs):
         raise exc.ValidationError(*args, **kwargs)
 
-    async def __call__(self, request: "Request", inpt=None):
-        rv, pages, i = None, self.state.get("_pages", []), 0
+    async def __call__(self, request: "Request", input=None):
         self.request = request
-
-        if inpt is not None and self.nav_menu and inpt in self.nav_menu:
-            if self.state.get("_current_page", 0) == 0:
-                return redirect(self.nav_menu[inpt][1])
+        rv, pages, i = None, self.state.get("_pages", []), 0
+        current_page = self.state.get("_current_page", 0)
+        actions = self.get_action_dict()
+        key = input if input is None else f"{input}".strip()
+        if current_page == 0 and key is not None and key in actions:
+            if (rv := actions[key].handle(self, key)) is not None:
+                return rv
+            input = key = None
 
         pg_menu = self.PaginationMenu
 
-        if inpt is not None and len(pages) > 1:
-            if inpt in (pg_menu.next.value, pg_menu.prev.value):
-                if (
-                    inpt == pg_menu.prev.value
-                    and self.state.get("_current_page", 0) > 0
-                ):
-                    self.state._current_page = i = self.state._current_page - 1
+        if key is not None and len(pages) > 1:
+            if key in (pg_menu.next.value, pg_menu.prev.value):
+                if key == pg_menu.prev.value and current_page > 0:
+                    self.state._current_page = i = current_page - 1
                     rv = self.state._action
-                elif (
-                    inpt == pg_menu.next.value
-                    and self.state.get("_current_page", 0) < len(pages) - 1
-                ):
-                    self.state._current_page = i = self.state._current_page + 1
+                elif key == pg_menu.next.value and current_page < len(pages) - 1:
+                    self.state._current_page = i = current_page + 1
                     rv = self.state._action
-                rv and (inpt := None)
-
         if rv is None:
             try:
                 if not self.state.get("__initialized__"):
                     if self.init is not None:
-                        rv = await self._async_init(inpt)
+                        rv = await self._async_init(input)
                     self.state.__initialized__ = True
 
-                if rv is None and inpt is not None:
+                if rv is None and input is not None:
                     if self.validate is not None:
-                        inpt = await self._async_validate(inpt)
+                        input = await self._async_validate(input)
 
-                    if inpt is not None:
-                        rv = await self._async_handle(inpt)
+                    if input is not None:
+                        rv = await self._async_handle(input)
                 rv is None and (rv := await self._async_render())
             except Exception as e:
-                rv = await self._async_handle_exception(e, inpt)
+                rv = await self._async_handle_exception(e, input)
 
             if rv is None:
                 rv = self.exit_code
 
             if rv == self.CON or rv == self.END:
-                nav_menu = [] if rv == self.END else self.get_menu_items()
+                nav_menu = [] if rv == self.END else self.render_action_list()
                 self.state._action = rv
                 self.state._pages = pages = list(
                     self.payload.paginate(

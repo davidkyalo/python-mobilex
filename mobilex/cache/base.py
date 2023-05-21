@@ -9,13 +9,13 @@ from mobilex.utils.uri import Uri
 
 
 if t.TYPE_CHECKING:
-    from mobilex import App 
+    from mobilex import App
 
-CacheKey = t.NewType('CacheKey', str)
+CacheKey = t.NewType("CacheKey", str)
 
 AnyKey = t.Union[str, Uri, t.Tuple[t.Union[str, Uri], ...]]
 Timeout = t.Union[int, float, timedelta]
-Version = t.NewType('Version', int)
+Version = t.NewType("Version", int)
 KeyFunc = t.Union[t.Callable[[AnyKey, AnyKey, Version], CacheKey], str]
 
 
@@ -27,12 +27,15 @@ def default_key_func(key: AnyKey, prefix: AnyKey, version: Version) -> CacheKey:
     the `prefix'. KEY_FUNCTION can be used to specify an alternate
     function with custom key making behavior.
     """
-    
+
     if version is None:
-        return str(Uri(key)) if prefix is None else f'{Uri(prefix)}:{Uri(key)}'
+        return str(Uri(key)) if prefix is None else f"{Uri(prefix)}:{Uri(key)}"
     else:
-        return f'{version}:{Uri(key)}' if prefix is None \
-                else f'{Uri(prefix)}:{version}:{Uri(key)}'
+        return (
+            f"{version}:{Uri(key)}"
+            if prefix is None
+            else f"{Uri(prefix)}:{version}:{Uri(key)}"
+        )
 
 
 def get_key_func(key_func):
@@ -45,21 +48,25 @@ def get_key_func(key_func):
         if callable(key_func):
             return key_func
         elif isinstance(key_func, str):
-            mod, _, nm = key_func.rpartition(':') 
+            mod, _, nm = key_func.rpartition(":")
             if not nm:
-                mod, _, nm = key_func.rpartition('.') 
-            
+                mod, _, nm = key_func.rpartition(".")
+
             return attrgetter(nm)(import_module(mod))
     return default_key_func
 
 
-
-
 class BaseCache:
-
-    def __init__(self, *, timeout: Timeout = 300, key_prefix: AnyKey = None, 
-            version: Version = None, serializer=None, key_func: KeyFunc = None, **options):
-        
+    def __init__(
+        self,
+        *,
+        timeout: Timeout = 300,
+        key_prefix: AnyKey = None,
+        version: Version = None,
+        serializer=None,
+        key_func: KeyFunc = None,
+        **options,
+    ):
         if isinstance(timeout, timedelta):
             self.default_timeout = timeout.total_seconds()
         elif timeout is None:
@@ -68,8 +75,8 @@ class BaseCache:
             try:
                 self.default_timeout = float(timeout)
             except (ValueError, TypeError) as e:
-                raise TypeError('timeout must be a number or timedelta') from e
-            
+                raise TypeError("timeout must be a number or timedelta") from e
+
         self.key_prefix = key_prefix
         self.version = version
         self.key_func = get_key_func(key_func)
@@ -86,7 +93,7 @@ class BaseCache:
             return timeout.total_seconds()
         else:
             return timeout
-            
+
     def make_key(self, key, version=None):
         """
         Construct the key used by all other methods. By default, use the
@@ -98,14 +105,14 @@ class BaseCache:
         version is None and (version := self.version)
 
         return self.key_func(key, self.key_prefix, version)
-    
+
     def dumps(self, obj):
         return self.serializer.dumps(obj)
-    
+
     def loads(self, obj):
         return self.serializer.loads(obj)
-    
-    async def setup(self, app: 'App'):
+
+    def setup(self, app: "App"):
         pass
 
     async def add(self, key, value, timeout=..., version=None):
@@ -116,21 +123,23 @@ class BaseCache:
 
         Return True if the value was stored, False otherwise.
         """
-        raise NotImplementedError('subclasses of BaseCache must provide an add() method')
+        raise NotImplementedError(
+            "subclasses of BaseCache must provide an add() method"
+        )
 
     async def get(self, key, version=None):
         """
         Fetch a given key from the cache. If the key does not exist, return
         default, which itself defaults to None.
         """
-        raise NotImplementedError('subclasses of BaseCache must provide a get() method')
+        raise NotImplementedError("subclasses of BaseCache must provide a get() method")
 
     async def set(self, key, value, timeout=..., version=None):
         """
         Set a value in the cache. If timeout is given, use that timeout for the
         key; otherwise use the default cache timeout.
         """
-        raise NotImplementedError('subclasses of BaseCache must provide a set() method')
+        raise NotImplementedError("subclasses of BaseCache must provide a set() method")
 
     # def touch(self, key, timeout=..., version=None):
     # 	"""
@@ -143,7 +152,9 @@ class BaseCache:
         """
         Delete a key from the cache, failing silently.
         """
-        raise NotImplementedError('subclasses of BaseCache must provide a delete() method')
+        raise NotImplementedError(
+            "subclasses of BaseCache must provide a delete() method"
+        )
 
     # def get_many(self, keys, version=None):
     # 	"""
@@ -242,7 +253,9 @@ class BaseCache:
 
     async def clear(self):
         """Remove *all* values from the cache at once."""
-        raise NotImplementedError('subclasses of BaseCache must provide a clear() method')
+        raise NotImplementedError(
+            "subclasses of BaseCache must provide a clear() method"
+        )
 
     # def incr_version(self, key, delta=1, version=None):
     # 	"""

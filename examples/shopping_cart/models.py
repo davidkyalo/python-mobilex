@@ -1,8 +1,5 @@
-from collections import abc
 from dataclasses import dataclass, field
-from decimal import Decimal
 from random import choice
-from typing_extensions import SupportsIndex
 
 
 @dataclass(frozen=True)
@@ -10,7 +7,16 @@ class Product:
     id: int
     name: str
     price: int
-    description: str = "This is just a simple description for this product."
+    description: str = "\n".join(
+        (
+            "Discover a captivating fruit ",
+            "with radiant, translucent allure,",
+            "its colors shifting in a mesmerizing dance.",
+            "Its enchanting flavors rejuvenate the body",
+            "and uplift the spirit, offering a truly",
+            "magical experience for all who partake.",
+        )
+    )
 
 
 _products: dict[int, "Product"] = {

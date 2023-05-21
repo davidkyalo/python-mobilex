@@ -48,4 +48,4 @@ logging.getLogger().setLevel(logging.DEBUG)
 logging.getLogger("asyncio").setLevel(logging.DEBUG)
 logging.getLogger("requests").setLevel(logging.INFO)
 
-asyncio.ensure_future(ussd_app.run())
+ussd_app.run()

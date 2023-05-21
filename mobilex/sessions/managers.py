@@ -19,9 +19,9 @@ class SessionManager(abc.ABC):
         self.app = app
         self.backend: "BaseCache" = backend
 
-    async def setup(self, app: "App"):
+    def setup(self, app: "App"):
         self.app = app
-        await self.backend.setup(app)
+        self.backend.setup(app)
 
     # @property
     # def backend(self):

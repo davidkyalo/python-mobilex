@@ -19,10 +19,8 @@ if t.TYPE_CHECKING:
     from . import App, Response, Request
 
 
-
 class UssdRouter:
-
-    parent: 'App'
+    parent: "App"
 
     def __init__(self, name):
         self.name = name
@@ -32,18 +30,18 @@ class UssdRouter:
     @property
     def _home_screen(self):
         try:
-            return self.__dict__['_home_screen']
+            return self.__dict__["_home_screen"]
         except KeyError:
             return self._start_screen
-    
+
     @_home_screen.setter
     def _home_screen(self, value):
-        self.__dict__['_home_screen'] = value
-    
+        self.__dict__["_home_screen"] = value
+
     @property
     def config(self):
         return self.parent.config
-    
+
     def run_embeded(self, parent):
         self.parent = parent
 
@@ -52,10 +50,11 @@ class UssdRouter:
             nonlocal name, self
             self.register_screen(name, screen)
             return screen
+
         return decorator
-    
+
     def register_screen(self, name: str, screen: t.Any):
-        self._registry[''].set(name, screen)
+        self._registry[""].set(name, screen)
         return screen
 
     def start_screen(self, name: str):
@@ -63,8 +62,9 @@ class UssdRouter:
             nonlocal name, self
             self.register_start_screen(name, screen)
             return screen
+
         return decorator
-    
+
     def register_start_screen(self, name: str, screen: t.Any):
         self._start_screen = name, screen
         return self.register_screen(name, screen)
@@ -74,47 +74,50 @@ class UssdRouter:
             nonlocal name, self
             self.register_home_screen(name, screen)
             return screen
+
         return decorator
-    
+
     def register_home_screen(self, name: str, screen: t.Any):
         self._home_screen = name, screen
         return self.register_screen(name, screen)
 
     def get_screen(self, name: str, default=...):
-        rkey, key = name.split('.', 1)
-        if (reg := self._registry.get('' if rkey == self.name else rkey)):
+        nm, key = self.name, name
+        if name.startswith(f"/{nm}/"):
+            key = name[len(nm) + 2 :]
+        if reg := self._registry[""]:
             return reg.get(key, default)
         elif default is ...:
-            raise LookupError(f'UssdScreen {name!r} not found')
+            raise LookupError(f"UssdScreen {name!r} not found")
         return default
 
-    def get_all_screens(self, name: str, default=...):
-        rkey, key = name.split('.', 1)
-        if (reg := self._registry.get('' if rkey == self.name else rkey)):
-            return reg.getall(key, default)
-        elif default is ...:
-            raise LookupError(f'UssdScreen {name!r} not found')
-        return default
+    # def get_all_screens(self, name: str, default=...):
+    #     rkey, key = name.split("/", 1)
+    #     if reg := self._registry.get("" if rkey == self.name else rkey):
+    #         return reg.getall(key, default)
+    #     elif default is ...:
+    #         raise LookupError(f"UssdScreen {name!r} not found")
+    #     return default
 
     def get_start_screen(self, *, withname=False):
         name, screen = self._start_screen
-        return (f'{self.name}.{name}', screen) if withname else screen
-    
+        return (f"/{self.name}/{name}", screen) if withname else screen
+
     def get_home_screen(self, *, withname=False):
         name, screen = self._home_screen
-        return (f'{self.name}.{name}', screen) if withname else screen
-    
-    def abs_screen_name(self, name: str):
-        return f'{self.name}{name}' if name[0] == 0 else name
+        return (f"/{self.name}/{name}", screen) if withname else screen
 
-    def _eval_argv(self, request: 'Request') -> 'Response':
+    def abs_screen_name(self, name: str):
+        return name if name[:1] == "/" else f"/{self.name}/{name}"
+
+    def _eval_argv(self, request: "Request") -> "Response":
         session = request.session
         argv = ArgumentVector(
             service_code=request.service_code,
             argstr=request.ussd_string,
-            base_code=request.initial_code
+            base_code=request.initial_code,
         )
-        
+
         if session.is_stale or not (oldargv := session.argv):
             request.args = argv.args
         else:
@@ -122,24 +125,25 @@ class UssdRouter:
 
         session.argv = argv
 
-    async def pre_request(self, request: 'Request') -> 'Response':
+    async def pre_request(self, request: "Request") -> "Response":
         request.app = self
         self._eval_argv(request)
 
-    async def post_request(self, request: 'Request', response: 'Response') -> 'Response':
+    async def post_request(
+        self, request: "Request", response: "Response"
+    ) -> "Response":
         return response
 
     def create_new_state(self, name, screen):
         cls = screen.Meta.state_class
         return cls(name)
 
-    def create_screen(self, state, request: 'Request'):
+    def create_screen(self, state, request: "Request"):
         cls = self.get_screen(state.screen)
         rv = cls(state)
         return rv
 
-    async def dispatch_request(self, request):
-
+    async def dispatch_request(self, request: "Request"):
         session = request.session
         state = session.state
 
@@ -156,14 +160,14 @@ class UssdRouter:
             inpt, *args = request.args or (None,)
 
         if state is None:
-            raise RuntimeError('Screen state cannot be None.')
+            raise RuntimeError("Screen state cannot be None.")
 
         rv = await self.dispatch_to_screen(request, state, inpt, *args)
         return rv
 
-    async def dispatch_to_screen(self, request: 'Request', state, inpt=None, /, *args):
+    async def dispatch_to_screen(self, request: "Request", state, inpt=None, /, *args):
         screen = self.create_screen(state, request)
-        
+
         try:
             res = await screen(request, inpt)
         except Exception as e:
@@ -177,7 +181,7 @@ class UssdRouter:
                     state = request.session.state = self.create_new_state(n, s)
                     state.update(res.ctx)
                 else:
-                    n, s = ores.to, self.get_screen(ores.to) 
+                    n, s = ores.to, self.get_screen(ores.to)
                     state = request.session.state = self.create_new_state(n, s)
                     state.update(ores.ctx)
                     state.update(res.ctx)
@@ -189,22 +193,20 @@ class UssdRouter:
                 state.update(res.ctx)
 
                 await request.history.push(res)
-                res.content is None or (args := (res.content,) + args) 
+                res.content is None or (args := (res.content,) + args)
                 return await self.dispatch_to_screen(request, state, *args)
-    
+
         request.session.state = screen.state
-        
+
         if res in (CON, END):
-            return f'{res} {screen.payload}'
+            return f"{res} {screen.payload}"
         elif isinstance(res, tuple):
-            return ' '.join(res)
+            return " ".join(res)
         elif isinstance(res, str):
             return res
-        print('*'*30, f'RESPONSE --> {res}')
-        raise RuntimeError('Screen must return Response object or string.')
+        raise RuntimeError("Screen must return Response object or string.")
 
     async def __call__(self, request, *args, **kwargs):
         response = await self.pre_request(request)
         response is None and (response := await self.dispatch_request(request))
         return await self.post_request(request, response) or response
-

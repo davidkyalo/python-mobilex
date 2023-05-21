@@ -1,13 +1,11 @@
 import enum
-import typing as t
-from functools import reduce
-from operator import or_
 from types import DynamicClassAttribute
 
-from typing_extensions import Self
 
-__all__ = ["Choices", "IntChoices", "StrChoices", "IntFlagChoices"]
-
+__all__ = [
+    "Choices",
+    "StrChoices",
+]
 
 
 class ChoicesMeta(enum.EnumMeta):
@@ -83,51 +81,5 @@ class Choices(enum.Enum, metaclass=ChoicesMeta):
         return f"{self.__class__.__qualname__}.{self._name_}"
 
 
-class IntChoices(int, Choices):
-    """Class for creating enumerated integer choices."""
-
-    pass
-
-
 class StrChoices(str, Choices):
     """Class for creating enumerated string choices."""
-
-    def _generate_next_value_(name, start, count, last_values):
-        return name
-
-
-class IntFlagChoicesMeta(ChoicesMeta):
-   
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        if self._member_map_:
-            self._all_ = None
-    
-    @property
-    def all(self):
-        if self._all_ is None:
-            if union := reduce(or_, map(int, self._member_map_.values()), 0):
-                self._all_ = self(union)
-        return self._all_
-
-
-
-class IntFlagChoices(enum.IntFlag, Choices, metaclass=IntFlagChoicesMeta):
-    
-    all: Self
-    _all_: Self
-
-    def __iter__(self):
-        return (m for m in self.__class__ if m & self)
-
-    def __contains__(self: Self, other: Self) -> bool:
-        return not not (self & other)
-
-    def __length_hint__(self) -> int:
-        all = self._all_
-        if self is all:
-            return len(self.__class__._member_map_)
-        elif self & all:
-            return 1
-        return 0
-
