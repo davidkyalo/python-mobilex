@@ -1,22 +1,18 @@
 import asyncio
 import logging
 import typing as t
-
 from collections import defaultdict
 
-
-from .utils import ArgumentVector
-from .screens import CON, END
 from .const import ResponseType
-
-from .response import Response, RedirectResponse
+from .response import RedirectResponse, Response
+from .screens import CON, END
 from .screens.registry import ScreenRegistry
-
+from .utils import ArgumentVector
 
 logger = logging.getLogger(__name__)
 
 if t.TYPE_CHECKING:
-    from . import App, Response, Request
+    from . import App, Request, Response
 
 
 class UssdRouter:
@@ -91,14 +87,6 @@ class UssdRouter:
             raise LookupError(f"UssdScreen {name!r} not found")
         return default
 
-    # def get_all_screens(self, name: str, default=...):
-    #     rkey, key = name.split("/", 1)
-    #     if reg := self._registry.get("" if rkey == self.name else rkey):
-    #         return reg.getall(key, default)
-    #     elif default is ...:
-    #         raise LookupError(f"UssdScreen {name!r} not found")
-    #     return default
-
     def get_start_screen(self, *, withname=False):
         name, screen = self._start_screen
         return (f"/{self.name}/{name}", screen) if withname else screen
@@ -110,7 +98,7 @@ class UssdRouter:
     def abs_screen_name(self, name: str):
         return name if name[:1] == "/" else f"/{self.name}/{name}"
 
-    def _eval_argv(self, request: "Request") -> "Response":
+    def eval_argv(self, request: "Request") -> "Response":
         session = request.session
         argv = ArgumentVector(
             service_code=request.service_code,
@@ -124,15 +112,6 @@ class UssdRouter:
             request.args = argv - oldargv
 
         session.argv = argv
-
-    async def pre_request(self, request: "Request") -> "Response":
-        request.app = self
-        self._eval_argv(request)
-
-    async def post_request(
-        self, request: "Request", response: "Response"
-    ) -> "Response":
-        return response
 
     def create_new_state(self, name, screen):
         cls = screen.Meta.state_class
@@ -207,6 +186,5 @@ class UssdRouter:
         raise RuntimeError("Screen must return Response object or string.")
 
     async def __call__(self, request, *args, **kwargs):
-        response = await self.pre_request(request)
-        response is None and (response := await self.dispatch_request(request))
-        return await self.post_request(request, response) or response
+        self.eval_argv(request)
+        return await self.dispatch_request(request)

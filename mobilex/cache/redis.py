@@ -1,93 +1,57 @@
-import asyncio
 import typing as t
 
-from datetime import timedelta
 import redis.asyncio as redis
 
-from .base import BaseCache, AnyKey, Timeout, Version
+from mobilex.utils import to_timedelta
 
+from .base import BaseCache
 
-loop = asyncio.get_event_loop()
+if t.TYPE_CHECKING:
+    from mobilex import App
 
 
 class RedisCache(BaseCache):
-    def __init__(self, **options):
-        super().__init__(**options)
-        self.store: redis.Redis = None
+    store: redis.Redis
 
-    def setup(self, app=None):
-        location = self.options.get("location") or "redis://localhost"
-        self.store = redis.from_url(location)
+    def __init__(self, app: "App", location=None, **options):
+        super().__init__(app, **options)
+        self.store = redis.from_url(location or "redis://localhost")
 
-    async def add(self, key, value, timeout=..., version=None) -> bool:
-        """
-        Set a value in the cache if the key does not already exist. If
-        timeout is given, use that timeout for the key; otherwise use the
-        default cache timeout.
-
-        Return True if the value was stored, False otherwise.
-        """
-        timeout = self.get_timeout(timeout)
-        if isinstance(timeout, float):
-            return await self.store.set(
-                self.make_key(key, version),
-                self.dumps(value),
-                pexpire=int(timeout * 1000),
-                exist=self.store.SET_IF_NOT_EXIST,
-            )
-        else:
-            return await self.store.set(
-                self.make_key(key, version),
-                self.dumps(value),
-                expire=timeout,
-                exist=self.store.SET_IF_NOT_EXIST,
-            )
-
-    async def get(self, key, version=None) -> t.Any:
+    async def get(self, key) -> t.Any:
         """
         Fetch a given key from the cache. If the key does not exist, return
         default, which itself defaults to None.
         """
-        rv = await self.store.get(self.make_key(key, version))
-        return rv if rv is None else self.loads(rv)
+        if (rv := await self.store.get(self.make_key(key))) is not None:
+            rv = self.loads(rv)
+        return rv
 
-    async def set(self, key, value, timeout=..., version=None) -> bool:
+    async def set(self, key, value, ttl=None) -> bool:
         """
         Set a value in the cache. If timeout is given, use that timeout for the
         key; otherwise use the default cache timeout.
         """
-        timeout = self.get_timeout(timeout)
-        if isinstance(timeout, float):
-            return await self.store.set(
-                self.make_key(key, version),
-                self.dumps(value),
-                px=int(timeout * 1000),
-            )
-        else:
-            return await self.store.set(
-                self.make_key(key, version),
-                self.dumps(value),
-                ex=timeout,
-            )
+        ttl = self.ttl if ttl is None else to_timedelta(ttl)
+        return await self.store.set(self.make_key(key), self.dumps(value), px=ttl)
 
-    async def delete(self, key, version=None) -> int:
+    async def delete(self, key) -> int:
         """
         Delete a key from the cache, failing silently.
         """
-        return await self.store.delete(self.make_key(key, version))
+        return await self.store.delete(self.make_key(key))
 
-    async def keys(self, pattern="*", version=None) -> int:
+    async def keys(self, pattern="*") -> list[bytes]:
         """
         Delete a key from the cache, failing silently.
         """
-        return await self.store.keys(self.make_key(pattern, version), encoding="utf-8")
+        return await self.store.keys(self.make_key(pattern))
 
-    async def clear(self):
-        """Remove *all* values from the cache at once."""
-        raise NotImplementedError(
-            "subclasses of BaseCache must provide a clear() method"
-        )
+    # async def clear(self):
+    #     """Remove *all* values from the cache at once."""
+    #     raise NotImplementedError(
+    #         "subclasses of BaseCache must provide a clear() method"
+    #     )
 
-    async def close(self, **kwargs):
-        """Close the cache connection"""
-        await self.store.close()
+    # async def close(self, **kwargs):
+    #     """Close the cache connection"""
+    #     await self.store.close()

@@ -29,6 +29,15 @@ class HomeScreen(Screen):
 
 @router.screen("catalog")
 class CatalogScreen(Screen):
+    def get_product_menu(self):
+        if not hasattr(self.state, "product_menu"):
+            products = all_products()
+            menu = {}
+            for i, item in enumerate(products, 1):
+                menu[f"{i}"] = item.id, f"{i:<2} {item.name:<10}- {item.price:.2f}/Kg"
+            self.state.product_menu = menu
+        return self.state.product_menu
+
     def handle(self, inpt: str):
         menu: dict = self.state.product_menu
         product_id = menu.get(inpt)

@@ -1,19 +1,17 @@
 import pytest
 
-from mobilex.screens import CON, Screen, END
-
-
 from mobilex import App, Request
-from mobilex.router import UssdRouter
-from mobilex.sessions import SessionManager
 from mobilex.cache.dict import DictCache
 from mobilex.cache.redis import RedisCache
 from mobilex.response import redirect
+from mobilex.router import UssdRouter
+from mobilex.screens import CON, END, Screen
+from mobilex.sessions import SessionManager
 
 
-@pytest.mark.parametrize("backend_class", [DictCache, RedisCache])
-async def test_basic(backend_class, fake_redis):
-    app = App(session_manager=SessionManager(backend_class()))
+@pytest.mark.parametrize("session_backend", [DictCache, RedisCache])
+async def test_basic(session_backend, fake_redis):
+    app = App(session_backend=session_backend)
 
     router = UssdRouter("test")
 
@@ -33,13 +31,13 @@ async def test_basic(backend_class, fake_redis):
             return CON
 
     app.include_router(router)
-    app.run()
+    app.setup()
 
     req_0 = Request("123456")
-    res_0: str = await app(req_0)
+    res_0: str = await app.adispatch(req_0)
     assert res_0.partition("\n")[0] == f"{CON} Hello world"
 
     val = "xyz"
     req_1 = Request(f"123456", ussd_string="xyz")
-    res_1 = await app(req_1)
+    res_1 = await app.adispatch(req_1)
     assert res_1.partition("\n")[0] == f"{END} Your value was {val}"

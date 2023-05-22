@@ -2,6 +2,7 @@ import typing as t
 
 
 from collections import ChainMap
+from typing import Any
 
 from .const import ResponseType
 
@@ -13,7 +14,6 @@ if t.TYPE_CHECKING:
 class _ResponseMeta(type):
     def __new__(mcls, name, bases, dct):
         super_new = super(_ResponseMeta, mcls).__new__
-
         st = dct["__state_attrs__"] = set(dct.get("__state_attrs__", ()))
         exclude = {n for n in st if n[0] == "-"}
         st -= exclude
