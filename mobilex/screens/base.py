@@ -88,10 +88,10 @@ class UssdPayload(UserString):
 
     def paginate(self, page_size, next_page_choice, prev_page_choice, foot=""):
         if isinstance(foot, (list, tuple, ActionSet)):
-            foot_list = None  # foot[:1]+[str(next_page_choice), ]+foot[1:]
+            # foot_list = None  # foot[:1]+[str(next_page_choice), ]+foot[1:]
             foot = "\n".join(map(str, foot))
-        else:
-            foot_list = None
+        # else:
+        #     foot_list = None
 
         foot = foot and "\n%s" % foot
         lfoot = len(foot)
@@ -119,30 +119,27 @@ class UssdPayload(UserString):
                     if i > 0:
                         yield "%s\n%s\n%s" % (yv, prev_page_choice, next_page_choice)
                     else:
-                        if foot_list:
-                            yield "%s\n%s" % (yv, "\n".join(foot_list))
-                        else:
-                            yield "%s\n%s\n%s" % (yv, next_page_choice, foot)
+                        # if foot_list:
+                        #     yield "%s\n%s" % (yv, "\n".join(foot_list))
+                        # else:
+                        #     yield "%s\n%s\n%s" % (yv, next_page_choice, foot)
+                        yield "%s\n%s\n%s" % (yv, next_page_choice, foot)
 
                     chunk = chunk[len(yv) + 1 :].strip()
                 i += 1
 
-    def __str__(self):
-        return self.data.strip()
+    # def __str__(self):
+    #     return self.data.strip()
 
 
 class Action(t.NamedTuple):
     label: str
-    key: str = None
     handler: str | abc.Callable = None
     screen: str | int = None
     args: tuple = None
     kwargs: abc.Mapping = None
+    key: str = None
     name: str = None
-
-    @property
-    def id(self):
-        return f"{self.key:>02}"
 
     def handle(self, screen: "Screen", value: str):
         args, kwds = self.args or (), self.kwargs or {}
@@ -257,13 +254,13 @@ class Screen(t.Generic[T], metaclass=ScreenType):
     actions = None
 
     nav_actions = [
-        Action("Back", "0", screen=-1, name="back"),
-        Action("Home", "00", screen=0, name="home"),
+        Action("Back", key="0", screen=-1, name="back"),
+        Action("Home", key="00", screen=0, name="home"),
     ]
 
     pagination_actions = [
-        Action("Back", "0", name="prev"),
-        Action("More", "99", name="next"),
+        Action("Back", key="0", name="prev"),
+        Action("More", key="99", name="next"),
     ]
 
     def __init__(self, state):

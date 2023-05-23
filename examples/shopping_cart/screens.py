@@ -32,7 +32,7 @@ class CatalogScreen(Screen):
     def get_actions(self):
         if not (menu := self.state.get("product_menu")):
             products = all_products()
-            self.state.product_menu = menu = [
+            menu = [
                 Action(
                     f"{item.name:<10}- {item.price:.2f}/Kg",
                     screen="product",
@@ -40,6 +40,7 @@ class CatalogScreen(Screen):
                 )
                 for item in products
             ]
+            self.state.product_menu = menu
         return menu
 
     async def render(self):
@@ -48,19 +49,17 @@ class CatalogScreen(Screen):
 
 @router.screen("product")
 class ProductScreen(Screen):
+    nav_actions = [
+        Action("Add to Cart", "add_to_cart"),
+        *Screen.nav_actions,
+    ]
+
     @property
     def product(self):
         return get_product(self.state.product_id)
 
-    def get_nav_actions(self) -> list[Action]:
-        return [
-            Action(
-                "Add to Cart",
-                screen="add_to_cart",
-                kwargs=dict(product_id=self.product.id),
-            ),
-            *super().get_nav_actions(),
-        ]
+    def add_to_cart(self, *a):
+        return redirect("add_to_cart", product_id=self.product.id)
 
     async def render(self):
         product = self.product
@@ -83,7 +82,7 @@ class AddToCartScreen(Screen):
         if qty >= 0.001:
             cart = self.session["cart"]
             cart[self.product.id] = qty
-            await self.request.history.pop()
+            # await self.request.history.pop()
             return redirect("cart", added=self.product.id)
         self.print("Invalid value!")
         self.print("Must be between 0.001 and 1000")

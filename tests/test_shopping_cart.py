@@ -18,8 +18,8 @@ async def test_basic(app: App):
 
     session, products = req_1.session, models.all_products()
     cart_ex = {products[i].id: v for i, v in ((1, 1.5), (7, 2))}
-
-    argv = session.argv
+    del products
+    argv, args = session.argv, req_1.args
     arg_str = f"{argv!s} {argv!r} {argv.base_code =}, {argv.service_code}"
 
     cart = session["cart"]
