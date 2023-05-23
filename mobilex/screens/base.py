@@ -83,21 +83,8 @@ class ScreenType(type):
 class UssdPayload(UserString):
     __slots__ = ()
 
-    # def __init__(self, data='', *, page_size=None, page_nav=None, foot_nav=None):
-    #     super().__init__(data)
-    #     self.page_size = page_size
-    #     self.page_nav = page_nav
-    #     self.foot_nav = foot_nav
-
-    # def extend(self, *objs, sep=" ", end="\n"):
-    #     for o in objs:
-    #         self.append(o, sep=sep, end=end)
-
     def append(self, *objs, sep=" ", end="\n"):
         self.data += f"{sep.join((str(s) for s in objs))}{end}"
-
-    # def prepend(self, *objs, sep=" ", end="\n"):
-    #     self.data = f"{sep.join((str(s) for s in objs))}{end}{self.data}".lstrip()
 
     def paginate(self, page_size, next_page_choice, prev_page_choice, foot=""):
         if isinstance(foot, (list, tuple, ActionSet)):
@@ -266,16 +253,6 @@ class Screen(t.Generic[T], metaclass=ScreenType):
     _payload_class: type[UssdPayload] = UssdPayload
     _state_class: type[ScreenState] = ScreenState
     _has_actions: bool = False
-    # class Meta:
-    #     state_class = ScreenState
-    #     payload_class = UssdPayload
-
-    # nav_menu = dict(
-    #     [
-    #         ("0", ("Back", -1)),
-    #         ("00", ("Home", 0)),
-    #     ]
-    # )
 
     actions = None
 
@@ -289,13 +266,6 @@ class Screen(t.Generic[T], metaclass=ScreenType):
         Action("More", "99", name="next"),
     ]
 
-    # class PaginationMenu(StrChoices):
-    #     next = "99", "More"
-    #     prev = "0", "Back"
-
-    #     def __str__(self):
-    #         return f"{self.value:<2} {self.label}"
-
     def __init__(self, state):
         self.state = state
         self.payload = self._payload_class("")
@@ -308,33 +278,23 @@ class Screen(t.Generic[T], metaclass=ScreenType):
     def print(self):
         return self.payload.append
 
-    # @property
-    # def _cached_actions(self) -> list[Action]:
-    #     try:
-    #         return self.__dict__["_cached_actions"]
-    #     except KeyError:
-    #         return self.__dict__.setdefault("_cached_actions", self.get_actions())
-
-    # @cached_property
-    # def _action_set(self):
-    #     return self.get_actions()
-
-    # @cached_property
-    # def _nav_action_set(self):
-    #     return self.get_nav_actions()
-
-    # @cached_property
-    # def _pagination_action_set(self):
-    #     return self.get_pagination_actions()
-
     def get_actions(self):
-        return ActionSet(self.actions or ())
+        return self.actions or ()
 
     def get_pagination_actions(self):
-        return ActionSet(self.pagination_actions or ())
+        return self.pagination_actions or ()
 
     def get_nav_actions(self):
-        return ActionSet(self.nav_actions or ())
+        return self.nav_actions or ()
+
+    def get_action_set(self):
+        return ActionSet(self.get_actions())
+
+    def get_pagination_action_set(self):
+        return ActionSet(self.get_pagination_actions())
+
+    def get_nav_action_set(self):
+        return ActionSet(self.get_nav_actions())
 
     async def handle(self, inpt):
         if self._has_actions:
@@ -342,9 +302,6 @@ class Screen(t.Generic[T], metaclass=ScreenType):
 
     async def render(self):
         return
-
-    # async def validate(self, request: 'Request', inpt):
-    #     return inpt
 
     async def handle_exception(self, e, inpt=None):
         if inpt is not None and isinstance(e, exc.ValidationError):
@@ -398,10 +355,10 @@ class Screen(t.Generic[T], metaclass=ScreenType):
         #         return rv
         #     input = key = None
 
-        pg_menu = self.get_pagination_actions()
-        next, prev = (pg_menu.get(k, _null_action) for k in ("next", "prev"))
+        pg_acts = self.get_pagination_action_set()
+        next, prev = (pg_acts.get(k, _null_action) for k in ("next", "prev"))
 
-        if key is not None and len(pages) > 1 and key in pg_menu:
+        if key is not None and len(pages) > 1 and key in pg_acts:
             if key == prev.key and current_page > 0:
                 self.state._current_page = i = current_page - 1
                 rv = self.state._action
@@ -417,7 +374,7 @@ class Screen(t.Generic[T], metaclass=ScreenType):
                     self.state.__initialized__ = True
 
                 # ACTIONS HERE
-                acts, nav_acts = self.get_actions(), self.get_nav_actions()
+                acts, nav_acts = self.get_action_set(), self.get_nav_action_set()
                 self._has_actions = not not acts
 
                 if key is not None:

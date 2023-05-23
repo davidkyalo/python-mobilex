@@ -3,7 +3,7 @@ import typing as t
 from mobilex import Request
 from mobilex.response import redirect
 from mobilex.router import UssdRouter
-from mobilex.screens import Action, ActionSet, Screen
+from mobilex.screens import Action, Screen
 
 from .models import Cart, CartItem, Product, all_products, get_product
 
@@ -29,44 +29,21 @@ class HomeScreen(Screen):
 
 @router.screen("catalog")
 class CatalogScreen(Screen):
-    def get_product_menu(self):
-        if not hasattr(self.state, "product_menu"):
-            products = all_products()
-            menu = {}
-            for i, item in enumerate(products, 1):
-                menu[f"{i}"] = item.id, f"{i:<2} {item.name:<10}- {item.price:.2f}/Kg"
-            self.state.product_menu = menu
-        return self.state.product_menu
-
     def get_actions(self):
         if not (menu := self.state.get("product_menu")):
             products = all_products()
-            self.state.product_menu = menu = ActionSet(
+            self.state.product_menu = menu = [
                 Action(
                     f"{item.name:<10}- {item.price:.2f}/Kg",
                     screen="product",
                     kwargs={"product_id": item.id},
                 )
                 for item in products
-            )
+            ]
         return menu
-
-    # def handle(self, inpt: str):
-    #     menu: dict = self.state.product_menu
-    #     product_id = menu.get(inpt)
-    #     if product_id:
-    #         return redirect("product", product_id=product_id)
-    #     self.print("Invalid choice!")
 
     async def render(self):
         self.print(f"Select a product.")
-        # products = all_products()
-        # product_menu = {}
-        # for i, product in enumerate(products, 1):
-        #     self.print(f"{i:<2} {product.name:<10}- {product.price:.2f}/Kg")
-        #     product_menu[f"{i}"] = product.id
-        # self.state.product_menu = product_menu
-        # return self.CON
 
 
 @router.screen("product")
@@ -76,21 +53,14 @@ class ProductScreen(Screen):
         return get_product(self.state.product_id)
 
     def get_nav_actions(self) -> list[Action]:
-        return (
-            ActionSet(
-                (
-                    Action(
-                        "Add to Cart",
-                        screen="add_to_cart",
-                        kwargs=dict(product_id=self.product.id),
-                    ),
-                )
-            )
-            | super().get_nav_actions()
-        )
-
-    def add_to_cart(self, *a):
-        return redirect("add_to_cart", product_id=self.product.id)
+        return [
+            Action(
+                "Add to Cart",
+                screen="add_to_cart",
+                kwargs=dict(product_id=self.product.id),
+            ),
+            *super().get_nav_actions(),
+        ]
 
     async def render(self):
         product = self.product
