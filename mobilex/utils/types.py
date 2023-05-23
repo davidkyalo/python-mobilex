@@ -1,95 +1,9 @@
 import typing as t
 from collections import abc
-from copy import deepcopy
 from typing import Any
-
-from typing_extensions import Self
 
 _T_Key = t.TypeVar("_T_Key", bound=abc.Hashable)
 _T_Val = t.TypeVar("_T_Val")
-
-_T_Pk = t.TypeVar("_T_Pk", bound=abc.Hashable)
-
-
-_object_new = object.__new__
-_object_setattr = object.__setattr__
-
-
-class FallbackDict(dict[_T_Key, _T_Val]):
-    __slots__ = ()
-
-    def __missing__(self, key):
-        return None
-
-
-class ReadonlyDict(dict[_T_Key, _T_Val]):
-    """A readonly `dict` subclass.
-
-    Raises:
-        TypeError: on any attempted modification
-    """
-
-    __slots__ = ()
-
-    def not_mutable(self, *a, **kw):
-        raise TypeError(f"readonly type: {self} ")
-
-    __delitem__ = __setitem__ = setdefault = not_mutable
-    clear = pop = popitem = update = __ior__ = not_mutable
-    del not_mutable
-
-    @classmethod
-    def fromkeys(cls, it: abc.Iterable[_T_Key], value: _T_Val = None):
-        return cls((k, value) for k in it)
-
-    def __reduce__(self):
-        return (
-            self.__class__,
-            (dict(self),),
-        )
-
-    def copy(self):
-        return self.__class__(self)
-
-    __copy__ = copy
-
-    def __deepcopy__(self, memo=None):
-        return self.__class__(deepcopy(dict(self), memo))
-
-    __or = dict[_T_Key, _T_Val].__or__
-
-    def __or__(self, o):
-        r = self.__or(o)
-        if r.__class__ is dict:
-            return self.__class__(r)
-        return r
-
-
-class FrozenDict(ReadonlyDict[_T_Key, _T_Val]):
-    """An hashable `ReadonlyDict`"""
-
-    __slots__ = ("_v_hash",)
-
-    def __hash__(self):
-        try:
-            ash = self._v_hash
-        except AttributeError:
-            ash = None
-            items = self._eval_hashable()
-            if items is not None:
-                try:
-                    ash = hash(items)
-                except TypeError:
-                    pass
-            _object_setattr(self, "_v_hash", ash)
-
-        if ash is None:
-            raise TypeError(f"un-hashable type: {self.__class__.__name__!r}")
-
-        return ash
-
-    def _eval_hashable(self) -> abc.Hashable:
-        return (*((k, self[k]) for k in sorted(self)),)
 
 
 class FrozenNamespaceDict(abc.Mapping[_T_Key, _T_Val]):
@@ -101,16 +15,13 @@ class FrozenNamespaceDict(abc.Mapping[_T_Key, _T_Val]):
         self.__dict__.update(*args, **kwds)
 
     def __len__(self) -> int:
-        return len(getattr(self, "__dict__", ""))
-
-    def __bool__(self) -> int:
-        return not not getattr(self, "__dict__", "")
+        return len(self.__dict__)
 
     def __contains__(self, o: _T_Key) -> bool:
         return hasattr(self, o)
 
-    def __dir__(self) -> abc.Iterable[str]:
-        return iter(self.__dict__)
+    # def __dir__(self) -> abc.Iterable[str]:
+    #     return iter(self.__dict__)
 
     def __iter__(self):
         return iter(self.__dict__)
@@ -125,9 +36,12 @@ class FrozenNamespaceDict(abc.Mapping[_T_Key, _T_Val]):
             return self.__missing__(k)
 
     def __setattr__(self, name: str, value: Any) -> None:
-        raise AttributeError(
-            f"cannot set attribute {name!r} on {self.__class__.__name__!r}"
-        )
+        cls = self.__class__
+        raise AttributeError(f"cannot set attribute {name!r} on {cls.__name__!r}")
+
+    def __delattr__(self, name: str) -> None:
+        cls = self.__class__
+        raise AttributeError(f"cannot delete attribute {name!r} on {cls.__name__!r}")
 
     def __missing__(self, key: _T_Key):
         raise KeyError(key)
@@ -140,6 +54,7 @@ class NamespaceDict(
     _pos_args: t.ClassVar[tuple[str]] = ()
 
     __setattr__ = object.__setattr__
+    __delattr__ = object.__delattr__
 
     def __init__(self, *args, **kwds) -> None:
         (args or kwds) and self.update(*args, **kwds)

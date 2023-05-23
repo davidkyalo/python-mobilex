@@ -1,10 +1,9 @@
 import typing as t
-from collections import ChainMap, abc
+from collections import abc
 from datetime import timedelta
 from functools import cached_property
-from pathlib import PosixPath, PurePosixPath
 
-from mobilex.utils.types import FrozenNamespaceDict, ReadonlyDict
+from mobilex.utils.types import FrozenNamespaceDict
 
 from .router import UssdRouter
 from .sessions import History, Session, SessionManager

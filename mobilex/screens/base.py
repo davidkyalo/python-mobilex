@@ -1,21 +1,18 @@
-from inspect import isawaitable
-from operator import attrgetter
 import re
 import typing as t
-from collections import UserString, abc
+from collections import ChainMap, UserString, abc
+from copy import copy
+from inspect import isawaitable
 from logging import getLogger
+from operator import attrgetter
+from typing import Any, Iterator
 
-
-from ..utils.types import NamespaceDict, FrozenNamespaceDict
-from ..utils.enums import StrChoices
-
-
-from ..response import redirect
 from .. import exc
-
+from ..response import redirect
+from ..utils.types import NamespaceDict
 
 if t.TYPE_CHECKING:
-    from mobilex import Request, Response, App
+    from mobilex import App, Request
     from mobilex.sessions import Session
 
 
@@ -26,6 +23,8 @@ NOTHING = object()
 
 
 T = t.TypeVar("T")
+_DT = t.TypeVar("_DT")
+_AT = t.TypeVar("_AT", bound="Action")
 
 CON = "CON"
 
@@ -54,8 +53,6 @@ class ScreenState(NamespaceDict):
 
 class ScreenType(type):
     def __new__(mcls, name, bases, dct):
-        from .mixins import SyncRenderMixin, SyncHandleMixin
-
         super_new = super(ScreenType, mcls).__new__
 
         # is_abc = not any((b for b in bases if isinstance(b, UssdScreenType)))
@@ -92,20 +89,20 @@ class UssdPayload(UserString):
     #     self.page_nav = page_nav
     #     self.foot_nav = foot_nav
 
-    def extend(self, *objs, sep=" ", end="\n"):
-        for o in objs:
-            self.append(o, sep=sep, end=end)
+    # def extend(self, *objs, sep=" ", end="\n"):
+    #     for o in objs:
+    #         self.append(o, sep=sep, end=end)
 
     def append(self, *objs, sep=" ", end="\n"):
         self.data += f"{sep.join((str(s) for s in objs))}{end}"
 
-    def prepend(self, *objs, sep=" ", end="\n"):
-        self.data = f"{sep.join((str(s) for s in objs))}{end}{self.data}".lstrip()
+    # def prepend(self, *objs, sep=" ", end="\n"):
+    #     self.data = f"{sep.join((str(s) for s in objs))}{end}{self.data}".lstrip()
 
     def paginate(self, page_size, next_page_choice, prev_page_choice, foot=""):
-        if isinstance(foot, (list, tuple)):
+        if isinstance(foot, (list, tuple, ActionSet)):
             foot_list = None  # foot[:1]+[str(next_page_choice), ]+foot[1:]
-            foot = "\n".join(foot)
+            foot = "\n".join(map(str, foot))
         else:
             foot_list = None
 
@@ -148,23 +145,104 @@ class UssdPayload(UserString):
 
 
 class Action(t.NamedTuple):
-    key: str
     label: str
+    key: str = None
     handler: str | abc.Callable = None
     screen: str | int = None
-    context: abc.Mapping = None
+    args: tuple = None
+    kwargs: abc.Mapping = None
+    name: str = None
+
+    @property
+    def id(self):
+        return f"{self.key:>02}"
 
     def handle(self, screen: "Screen", value: str):
-        ctx = self.context or {}
+        args, kwds = self.args or (), self.kwargs or {}
         if (to := self.screen) is not None:
-            return redirect(to, **ctx)
+            return redirect(to, *args, **kwds)
         elif callable(func := self.handler):
-            return func(screen, value, **ctx)
+            return func(screen, value, *args, **kwds)
         elif isinstance(func, str):
-            return getattr(screen, func)(value, **ctx)
+            return getattr(screen, func)(value, *args, **kwds)
 
-    def __str__(self) -> str:
-        return f"{self.key}"
+    def __str__(self):
+        return "" if self.key is None else f"{self.key:<2} {self.label}"
+
+
+_null_action = Action(None)
+
+
+class _ActionDict(dict[str, _AT]):
+    __slots__ = ()
+
+
+class ActionSet(abc.Set[_AT]):
+    __slots__ = ("_chain", "_src")
+
+    _chain: ChainMap[str, _AT]
+
+    def __new__(cls, it: abc.Iterable[_AT] = ()):
+        self, named = object.__new__(cls), None
+        if isinstance(it, ActionSet):
+            it, named = it._chain.maps
+        src = _ActionDict(it if isinstance(it, _ActionDict) else cls._parse_src(it))
+        named = {o.name: o for o in src.values()} if named is None else copy(named)
+        self._chain, self._src = ChainMap(src, named), src
+        return self
+
+    @classmethod
+    def _parse_src(cls, iterable: abc.Iterable[_AT]):
+        seen, i = set(), 0
+
+        for it in iterable:
+            if it.key is None:
+                it = it._replace(key=(i := i + 1))
+            key, nm = str(it.key), it.name
+            assert key not in seen, f"duplicate action key {key!r}"
+            assert nm is None or nm not in seen, f"duplicate action name {nm!r}"
+            yield key, it
+            seen.update((key, nm))
+
+    @classmethod
+    def _to_key(cls, obj):
+        return str(obj.key if isinstance(obj, Action) else obj)
+
+    def __ror__(self, x: object):
+        if not isinstance(x, abc.Iterable):
+            return NotImplemented
+        return self.__class__(x) | self
+
+    def __or__(self, x: object):
+        if not isinstance(x, ActionSet):
+            if not isinstance(x, abc.Iterable):
+                return NotImplemented
+            x = self.__class__(x)
+        return self.__class__(_ActionDict(self._src | x._src))
+
+    def __contains__(self, x: object) -> bool:
+        return self._to_key(x) in self._chain
+
+    def __len__(self) -> int:
+        return len(self._src)
+
+    def __iter__(self) -> Iterator[_AT]:
+        return iter(self._src.values())
+
+    def __getitem__(self, key):
+        return self._chain[self._to_key(key)]
+
+    def __reduce__(self) -> str | tuple[Any, ...]:
+        return self.__class__, (self._src,)
+
+    def get(self, key, default: _DT = None):
+        return self._chain.get(self._to_key(key), default)
+
+    def keys(self):
+        return self._src.keys()
+
+    def names(self):
+        return self._chain.maps[1].keys()
 
 
 class Screen(t.Generic[T], metaclass=ScreenType):
@@ -185,17 +263,12 @@ class Screen(t.Generic[T], metaclass=ScreenType):
     state: ScreenState
 
     _meta: t.ClassVar[ScreenMetaOptions]
-
-    # lenargs = 1
-
-    # class ERRORS:
-    #     LEN_ARGS = 'Invalid Choice'
-    #     INVALID_CHOICE = 'Invalid Choice'
-
-    class Meta:
-        # __metadata__ = ScreenMetaOptions
-        state_class = ScreenState
-        payload_class = UssdPayload
+    _payload_class: type[UssdPayload] = UssdPayload
+    _state_class: type[ScreenState] = ScreenState
+    _has_actions: bool = False
+    # class Meta:
+    #     state_class = ScreenState
+    #     payload_class = UssdPayload
 
     # nav_menu = dict(
     #     [
@@ -204,21 +277,28 @@ class Screen(t.Generic[T], metaclass=ScreenType):
     #     ]
     # )
 
-    actions = [
-        Action("0", "Back", screen=-1),
-        Action("00", "Home", screen=0),
+    actions = None
+
+    nav_actions = [
+        Action("Back", "0", screen=-1, name="back"),
+        Action("Home", "00", screen=0, name="home"),
     ]
 
-    class PaginationMenu(StrChoices):
-        next = "99", "More"
-        prev = "0", "Back"
+    pagination_actions = [
+        Action("Back", "0", name="prev"),
+        Action("More", "99", name="next"),
+    ]
 
-        def __str__(self):
-            return f"{self.value:<2} {self.label}"
+    # class PaginationMenu(StrChoices):
+    #     next = "99", "More"
+    #     prev = "0", "Back"
+
+    #     def __str__(self):
+    #         return f"{self.value:<2} {self.label}"
 
     def __init__(self, state):
         self.state = state
-        self.payload = self.create_payload()
+        self.payload = self._payload_class("")
 
     @t.overload
     def print(self, *objs, sep=" ", end="\n"):
@@ -228,28 +308,36 @@ class Screen(t.Generic[T], metaclass=ScreenType):
     def print(self):
         return self.payload.append
 
-    @property
-    def _cached_actions(self) -> list[Action]:
-        try:
-            return self.__dict__["_cached_actions"]
-        except KeyError:
-            return self.__dict__.setdefault("_cached_actions", self.get_actions())
+    # @property
+    # def _cached_actions(self) -> list[Action]:
+    #     try:
+    #         return self.__dict__["_cached_actions"]
+    #     except KeyError:
+    #         return self.__dict__.setdefault("_cached_actions", self.get_actions())
 
-    def create_payload(self):
-        # return self._meta.payload_class()
-        return UssdPayload("")
+    # @cached_property
+    # def _action_set(self):
+    #     return self.get_actions()
 
-    def get_actions(self) -> list[Action]:
-        return self.actions or []
+    # @cached_property
+    # def _nav_action_set(self):
+    #     return self.get_nav_actions()
 
-    def get_action_dict(self):
-        return {str(act.key): act for act in self._cached_actions}
+    # @cached_property
+    # def _pagination_action_set(self):
+    #     return self.get_pagination_actions()
 
-    def render_action_list(self):
-        return [f"{act.key:<2} {act.label}" for act in self._cached_actions]
+    def get_actions(self):
+        return ActionSet(self.actions or ())
+
+    def get_pagination_actions(self):
+        return ActionSet(self.pagination_actions or ())
+
+    def get_nav_actions(self):
+        return ActionSet(self.nav_actions or ())
 
     async def handle(self, inpt):
-        if self.get_action_dict():
+        if self._has_actions:
             self.print("Invalid choice!")
 
     async def render(self):
@@ -302,23 +390,25 @@ class Screen(t.Generic[T], metaclass=ScreenType):
         self.request = request
         rv, pages, i = None, self.state.get("_pages", []), 0
         current_page = self.state.get("_current_page", 0)
-        actions = self.get_action_dict()
         key = input if input is None else f"{input}".strip()
-        if current_page == 0 and key is not None and key in actions:
-            if (rv := actions[key].handle(self, key)) is not None:
-                return rv
-            input = key = None
 
-        pg_menu = self.PaginationMenu
+        # actions = self.get_action_set()
+        # if current_page == 0 and key is not None and key in actions:
+        #     if (rv := actions[key].handle(self, key)) is not None:
+        #         return rv
+        #     input = key = None
 
-        if key is not None and len(pages) > 1:
-            if key in (pg_menu.next.value, pg_menu.prev.value):
-                if key == pg_menu.prev.value and current_page > 0:
-                    self.state._current_page = i = current_page - 1
-                    rv = self.state._action
-                elif key == pg_menu.next.value and current_page < len(pages) - 1:
-                    self.state._current_page = i = current_page + 1
-                    rv = self.state._action
+        pg_menu = self.get_pagination_actions()
+        next, prev = (pg_menu.get(k, _null_action) for k in ("next", "prev"))
+
+        if key is not None and len(pages) > 1 and key in pg_menu:
+            if key == prev.key and current_page > 0:
+                self.state._current_page = i = current_page - 1
+                rv = self.state._action
+            elif key == next.key and current_page < len(pages) - 1:
+                self.state._current_page = i = current_page + 1
+                rv = self.state._action
+
         if rv is None:
             try:
                 if not self.state.get("__initialized__"):
@@ -326,12 +416,21 @@ class Screen(t.Generic[T], metaclass=ScreenType):
                         rv = await self._async_init(input)
                     self.state.__initialized__ = True
 
+                # ACTIONS HERE
+                acts, nav_acts = self.get_actions(), self.get_nav_actions()
+                self._has_actions = not not acts
+
+                if key is not None:
+                    if act := acts.get(key) or nav_acts.get(key):
+                        rv = act.handle(self, key)
+
                 if rv is None and input is not None:
                     if self.validate is not None:
                         input = await self._async_validate(input)
 
                     if input is not None:
                         rv = await self._async_handle(input)
+
                 rv is None and (rv := await self._async_render())
             except Exception as e:
                 rv = await self._async_handle_exception(e, input)
@@ -339,19 +438,14 @@ class Screen(t.Generic[T], metaclass=ScreenType):
             if rv is None:
                 rv = self.exit_code
 
-            if rv == self.CON or rv == self.END:
-                nav_menu = [] if rv == self.END else self.render_action_list()
-                self.state._action = rv
-                self.state._pages = pages = list(
-                    self.payload.paginate(
-                        request.app.config.max_page_length - 4,
-                        pg_menu.next,
-                        pg_menu.prev,
-                        nav_menu,
-                    )
-                )
+            if rv in (self.CON, self.END):
+                payload = self.payload
+                acts and payload.append(*acts, sep="\n")
+                nav_acts = [] if rv == self.END else nav_acts
+                mx_page_len = request.app.config.max_page_length - 4
+                pages = list(payload.paginate(mx_page_len, next, prev, nav_acts))
+                self.state._action, self.state._pages = rv, pages
                 self.state._current_page = i = 0
-                # self.state._prev = self.payload
             else:
                 return rv
 

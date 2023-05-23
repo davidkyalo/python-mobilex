@@ -1,13 +1,11 @@
 import typing as t
 
-
 from mobilex import Request
-from mobilex.screens import Screen, Action
-from mobilex.router import UssdRouter
 from mobilex.response import redirect
-from mobilex.screens.base import Action
-from .models import all_products, get_product, Product, Cart, CartItem
+from mobilex.router import UssdRouter
+from mobilex.screens import Action, ActionSet, Screen
 
+from .models import Cart, CartItem, Product, all_products, get_product
 
 router = UssdRouter(f"shopping_cart")
 
@@ -15,10 +13,12 @@ router = UssdRouter(f"shopping_cart")
 @router.start_screen("home")
 class HomeScreen(Screen):
     actions = [
-        Action("1", "Catalog", screen="catalog"),
-        Action("2", "Cart", screen="cart"),
-        Action("3", "My account", screen="account"),
+        Action("Catalog", screen="catalog"),
+        Action("Cart", screen="cart"),
+        Action("My account", screen="account"),
     ]
+
+    nav_actions = []
 
     def init(self, *a):
         self.session.setdefault("cart", {})
@@ -38,22 +38,35 @@ class CatalogScreen(Screen):
             self.state.product_menu = menu
         return self.state.product_menu
 
-    def handle(self, inpt: str):
-        menu: dict = self.state.product_menu
-        product_id = menu.get(inpt)
-        if product_id:
-            return redirect("product", product_id=product_id)
-        self.print("Invalid choice!")
+    def get_actions(self):
+        if not (menu := self.state.get("product_menu")):
+            products = all_products()
+            self.state.product_menu = menu = ActionSet(
+                Action(
+                    f"{item.name:<10}- {item.price:.2f}/Kg",
+                    screen="product",
+                    kwargs={"product_id": item.id},
+                )
+                for item in products
+            )
+        return menu
+
+    # def handle(self, inpt: str):
+    #     menu: dict = self.state.product_menu
+    #     product_id = menu.get(inpt)
+    #     if product_id:
+    #         return redirect("product", product_id=product_id)
+    #     self.print("Invalid choice!")
 
     async def render(self):
         self.print(f"Select a product.")
-        products = all_products()
-        product_menu = {}
-        for i, product in enumerate(products, 1):
-            self.print(f"{i:<2} {product.name:<10}- {product.price:.2f}/Kg")
-            product_menu[f"{i}"] = product.id
-        self.state.product_menu = product_menu
-        return self.CON
+        # products = all_products()
+        # product_menu = {}
+        # for i, product in enumerate(products, 1):
+        #     self.print(f"{i:<2} {product.name:<10}- {product.price:.2f}/Kg")
+        #     product_menu[f"{i}"] = product.id
+        # self.state.product_menu = product_menu
+        # return self.CON
 
 
 @router.screen("product")
@@ -62,11 +75,19 @@ class ProductScreen(Screen):
     def product(self):
         return get_product(self.state.product_id)
 
-    def get_actions(self) -> list[Action]:
-        return [
-            Action("1", "Add to Cart", "add_to_cart"),
-            *super().get_actions(),
-        ]
+    def get_nav_actions(self) -> list[Action]:
+        return (
+            ActionSet(
+                (
+                    Action(
+                        "Add to Cart",
+                        screen="add_to_cart",
+                        kwargs=dict(product_id=self.product.id),
+                    ),
+                )
+            )
+            | super().get_nav_actions()
+        )
 
     def add_to_cart(self, *a):
         return redirect("add_to_cart", product_id=self.product.id)
@@ -92,7 +113,7 @@ class AddToCartScreen(Screen):
         if qty >= 0.001:
             cart = self.session["cart"]
             cart[self.product.id] = qty
-            self.request.history.pop()
+            await self.request.history.pop()
             return redirect("cart", added=self.product.id)
         self.print("Invalid value!")
         self.print("Must be between 0.001 and 1000")
@@ -108,10 +129,9 @@ class AddToCartScreen(Screen):
 @router.screen("cart")
 class CartScreen(Screen):
     actions = [
-        Action("1", "Checkout", screen="checkout"),
-        Action("2", "Add more", screen="catalog"),
-        Action("3", "Remove items", screen="catalog"),
-        *Screen.actions,
+        Action("Checkout", screen="checkout"),
+        Action("Add more", screen="catalog"),
+        Action("Remove items", screen="catalog"),
     ]
 
     def get_cart_products(self):
@@ -140,10 +160,9 @@ class CartScreen(Screen):
 @router.screen("checkout")
 class CheckoutScreen(Screen):
     actions = [
-        Action("1", "Checkout", screen="checkout"),
-        Action("2", "Add more", screen="catalog"),
-        Action("3", "Remove items", screen="catalog"),
-        *Screen.actions,
+        Action("Checkout", screen="checkout"),
+        Action("Add more", screen="catalog"),
+        Action("Remove items", screen="catalog"),
     ]
 
     def get_cart_products(self):

@@ -114,7 +114,7 @@ class UssdRouter:
         session.argv = argv
 
     def create_new_state(self, name, screen):
-        cls = screen.Meta.state_class
+        cls = screen._state_class
         return cls(name)
 
     def create_screen(self, state, request: "Request"):
