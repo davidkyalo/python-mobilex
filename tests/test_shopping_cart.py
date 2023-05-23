@@ -24,3 +24,6 @@ async def test_basic(app: App):
 
     cart = session["cart"]
     assert cart == cart_ex
+
+    state = session.state
+    state.reset("screen")

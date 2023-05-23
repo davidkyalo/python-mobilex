@@ -1,3 +1,5 @@
+from unittest.mock import Mock
+
 import pytest
 
 from mobilex import App, Request
@@ -15,7 +17,7 @@ async def test_basic(app: App, router: Router, session_backend_config):
         def render(self):
             return redirect("home")
 
-    @router.screen("home")
+    @router.home_screen("home")
     class Home(Screen):
         async def handle(self, val):
             self.print(f"Your value was {val}")
@@ -34,4 +36,8 @@ async def test_basic(app: App, router: Router, session_backend_config):
     res_1 = await app.adispatch(req_1)
     assert res_1.partition("\n")[0] == f"{END} Your value was {val}"
 
-    del Index, Home
+    mk = Mock()
+    assert mk is router.get_screen("xyz", mk)
+
+    with pytest.raises(LookupError):
+        router.get_screen("xyz")

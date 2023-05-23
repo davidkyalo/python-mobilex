@@ -1,14 +1,10 @@
 import asyncio
 import dataclasses
-import hashlib
 import logging
 import time
 import typing as t
-from ast import List
 from collections import abc
-from functools import lru_cache
 from hashlib import md5
-from pathlib import PosixPath
 
 from mobilex.utils import to_bytes
 from mobilex.utils.types import NamespaceDict
@@ -16,7 +12,8 @@ from mobilex.utils.types import NamespaceDict
 if t.TYPE_CHECKING:
     from mobilex.cache.base import BaseCache
 
-    from .. import Request, Response
+    from . import Request, Response
+    from .screens import ScreenState
 
 logger = logging.getLogger(__package__)
 
@@ -81,7 +78,7 @@ class Session:
         return self.accessed_at == self.created_at
 
     @property
-    def state(self):
+    def state(self) -> "ScreenState":
         return self.data.get("__state__")
 
     @state.setter

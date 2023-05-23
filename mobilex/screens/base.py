@@ -54,30 +54,8 @@ class ScreenState(NamespaceDict):
 class ScreenType(type):
     def __new__(mcls, name, bases, dct):
         super_new = super(ScreenType, mcls).__new__
-
-        # is_abc = not any((b for b in bases if isinstance(b, UssdScreenType)))
-
-        # raw_meta = dct.get('Meta')
-
-        # meta_use_cls = raw_meta and getattr(raw_meta, '__metadata__', None)
-        # meta_use_cls and dct.update(__metadata__=meta_use_cls)
-
-        # Create class
         cls = super_new(mcls, name, bases, dct)
-
-        # metadata_cls = get_metadata_class(cls, '__metadata__')
-        # metadata_cls(cls, '_meta', raw_meta)
-
-        # if not(is_abc or cls._meta.is_abstract):
-        #     registry.set(cls._meta.name, cls)
         return cls
-
-    # def __str__(cls):
-    #     return cls._meta.name
-
-    # def __repr__(cls):
-    #     name = cls._meta.name
-    #     return f'{cls.__module__}.{cls.__name__}({name=!r})'
 
 
 class UssdPayload(UserString):

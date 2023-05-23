@@ -1,12 +1,9 @@
-import asyncio
 import logging
 import typing as t
-from collections import defaultdict
 
 from .const import ResponseType
 from .response import RedirectResponse, Response
 from .screens import CON, END, Screen
-from .screens.registry import ScreenRegistry
 from .utils import ArgumentVector
 
 logger = logging.getLogger(__name__)
@@ -20,7 +17,7 @@ class Router:
 
     def __init__(self, name):
         self.name = name
-        self._registry = defaultdict(ScreenRegistry)
+        self._registry = {}
         self._start_screen = None
 
     @property
@@ -34,10 +31,6 @@ class Router:
     def _home_screen(self, value):
         self.__dict__["_home_screen"] = value
 
-    @property
-    def config(self):
-        return self.parent.config
-
     def run_embeded(self, parent):
         self.parent = parent
 
@@ -50,7 +43,7 @@ class Router:
         return decorator
 
     def register_screen(self, name: str, screen: t.Any):
-        self._registry[""].set(name, screen)
+        self._registry[name] = screen
         return screen
 
     def start_screen(self, name: str):
@@ -81,8 +74,9 @@ class Router:
         nm, key = self.name, name
         if name.startswith(f"/{nm}/"):
             key = name[len(nm) + 2 :]
-        if reg := self._registry[""]:
-            return reg.get(key, default)
+
+        if (rv := self._registry.get(key)) is not None:
+            return rv
         elif default is ...:
             raise LookupError(f"UssdScreen {name!r} not found")
         return default
