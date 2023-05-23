@@ -1,8 +1,19 @@
 import re
 import typing as t
 from collections import abc
+from datetime import timedelta
 
 _ussd_split_re = r"\*(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)"
+
+
+def to_bytes(obj):
+    return obj if isinstance(obj, bytes) else str(obj).encode()
+
+
+def to_timedelta(
+    val: int | float | timedelta | None, *, resolution: timedelta = timedelta(seconds=1)
+):
+    return val if isinstance(val, timedelta) else (val or 0) * resolution
 
 
 def split_argstr(s):
@@ -10,7 +21,6 @@ def split_argstr(s):
 
 
 class ArgumentVector(list[str]):
-
     __slots__ = ()
 
     def __init__(
@@ -37,27 +47,19 @@ class ArgumentVector(list[str]):
 
     @property
     def base_code(self):
-        if "*" in self[0]:
-            return self[0].split("*", 1)[1]
-        else:
-            return ""
+        return self[0].split("*", 1)[1] if "*" in self[0] else ""
 
     @property
     def args(self):
         return self[1:]
 
     def __sub__(self, other):
-        if not isinstance(other, ArgumentVector):
+        if not isinstance(other, ArgumentVector):  # pragma: no cover
             return NotImplemented
 
         ld = len(self) - len(other)
 
         return self[-ld:] if ld > 0 and self[:-ld] == other else []
-
-    # def __getitem__(self, key):
-    # 	if isinstance(key, slice):
-    # 		return self.__class__(super().__getitem__(key))
-    # 	return super().__getitem__(key)
 
     def __str__(self):
         return "%s" % "*".join(self)

@@ -1,45 +1,43 @@
+from unittest.mock import Mock
 
 import pytest
-import typing as t
 
-from mobilex.screens.base import UssdScreen, END
-
-
-from mobilex import FlexUssd, Request
-from mobilex.router import UssdRouter
-from mobilex.sessions import SessionManager
+from mobilex import App, Request
 from mobilex.cache.dict import DictCache
+from mobilex.cache.redis import RedisCache
 from mobilex.response import redirect
+from mobilex.router import Router
+from mobilex.screens import CON, END, Screen
 
 
-async def test_basic():
-    
+@pytest.mark.parametrize("session_backend_config", [DictCache, RedisCache])
+async def test_basic(app: App, router: Router, session_backend_config):
+    @router.start_screen("index")
+    class Index(Screen):
+        def render(self):
+            return redirect("home")
 
-    cache = DictCache()
-
-
-    app = FlexUssd(session_manager=SessionManager(cache))
-
-    router = UssdRouter('test')
-
-    @router.start_screen('index')
-    class Index(UssdScreen):
-
-        async def render(self, request: 'Request'):
-            return redirect('.home')
-
-    @router.screen('home')
-    class Home(UssdScreen):
-
-        async def render(self, request: 'Request'):
-            self.print('Hello world')
+    @router.home_screen("home")
+    class Home(Screen):
+        async def handle(self, val):
+            self.print(f"Your value was {val}")
             return END
 
-    app.include_router(router)
-    await app.run()
+        async def render(self):
+            self.print("Hello world")
+            return CON
 
-    req = Request('123456')
+    req_0 = Request("123456")
+    res_0: str = await app.adispatch(req_0)
+    assert res_0.startswith(f"{CON} Hello world")
 
-    res = await app(req)
-    print(f' {req = !r} {res = !r}')
-    assert res == f'{END} Hello world'
+    val = "xyz"
+    req_1 = Request(f"123456", ussd_string="xyz")
+    res_1: str = await app.adispatch(req_1)
+    assert res_1.startswith(f"{END} Your value was {val}")
+
+    mk = Mock()
+    assert mk is router.get_screen("xyz", mk)
+
+    with pytest.raises(LookupError):
+        router.get_screen("xyz")

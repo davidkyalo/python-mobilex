@@ -1,75 +1,63 @@
 import asyncio
+import re
 import typing as t
-
 from datetime import timedelta
 
 try:
-    from cachetools import TTLCache    
-except ImportError: # pragma: no cover
+    from cachetools import TTLCache
+except ImportError:  # pragma: no cover
     raise ImportError(
         f"{__name__!r} requires 'cachetools' installed. `pip install cachetools`"
     )
 
-
 from .base import BaseCache
 
-
-
-loop = asyncio.get_event_loop()
+if t.TYPE_CHECKING:
+    from mobilex import App
 
 
 class DictCache(BaseCache):
-    
     store: TTLCache
 
-    async def setup(self, app):
-        self.store = TTLCache(1024, self.default_timeout)
+    def __init__(self, app: "App", location=None, **options):
+        super().__init__(app, **options)
+        self.store = TTLCache(1024, self.ttl.total_seconds())
 
-    async def add(self, key, value, timeout=..., version=None) -> bool:
-        """
-        Set a value in the cache if the key does not already exist. If
-        timeout is given, use that timeout for the key; otherwise use the
-        default cache timeout.
-
-        Return True if the value was stored, False otherwise.
-        """
-        sk = self.make_key(key, version)
-        if rv := not sk in self.store:
-            self.store[sk] = self.dumps(value)
-        return rv
-
-    async def get(self, key, version=None) -> t.Any:
+    async def get(self, key) -> t.Any:
         """
         Fetch a given key from the cache. If the key does not exist, return
         default, which itself defaults to None.
         """
-        rv = self.store.get(self.make_key(key, version))
-        return rv if rv is None else self.loads(rv)
+        if (rv := self.store.get(self.make_key(key))) is not None:
+            rv = self.loads(rv)
+        return rv
 
-    async def set(self, key, value, timeout=..., version=None) -> bool:
+    async def set(self, key, value) -> bool:
         """
         Set a value in the cache. If timeout is given, use that timeout for the
         key; otherwise use the default cache timeout.
         """
-        self.store[self.make_key(key, version)] = self.dumps(value)
+        self.store[self.make_key(key)] = self.dumps(value)
         return True
 
-    async def delete(self, key, version=None) -> int:
+    async def delete(self, key) -> int:
         """
         Delete a key from the cache, failing silently.
         """
-        return +(not self.store.pop(self.make_key(key, version), None) is None)
+        return +(not self.store.pop(self.make_key(key), None) is None)
 
-    async def keys(self, pattern='*', version=None) -> int:
+    async def keys(self, key="*"):
         """
         Delete a key from the cache, failing silently.
         """
-        return self.store.keys()
+        key = b".*".join(re.escape(p) for p in self.make_key(key).split(b"*") if p)
+        p_re = key and re.compile(key)
+        return [k for k in self.store.keys() if not p_re or p_re.search(k)]
 
-    async def clear(self):
-        """Remove *all* values from the cache at once."""
-        self.store.clear()
+    # async def clear(self):
+    #     """Remove *all* values from the cache at once."""
+    #     self.store.clear()
 
-    async def close(self, **kwargs):
-        """Close the cache connection"""
-        self.store.clear()
+    # async def close(self, **kwargs):
+    #     """Close the cache connection"""
+    #     self.clear()
