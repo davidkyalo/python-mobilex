@@ -50,9 +50,9 @@ class DictCache(BaseCache):
         """
         Delete a key from the cache, failing silently.
         """
-        key = ".*".join(re.escape(p) for p in self.make_key(key).split("*") if p)
+        key = b".*".join(re.escape(p) for p in self.make_key(key).split(b"*") if p)
         p_re = key and re.compile(key)
-        return [k for k in self.store.keys() if not p_re or p_re.search(str(k))]
+        return [k for k in self.store.keys() if not p_re or p_re.search(k)]
 
     # async def clear(self):
     #     """Remove *all* values from the cache at once."""

@@ -2,12 +2,12 @@ import typing as t
 
 from mobilex import Request
 from mobilex.response import redirect
-from mobilex.router import UssdRouter
+from mobilex.router import Router
 from mobilex.screens import Action, Screen
 
 from .models import Cart, CartItem, Product, all_products, get_product
 
-router = UssdRouter(f"shopping_cart")
+router = Router(f"shopping_cart")
 
 
 @router.start_screen("home")
@@ -108,11 +108,11 @@ class CartScreen(Screen):
         cart = self.session["cart"]
         return {get_product(id): qty for id, qty in cart.items()}
 
-    async def handle(self, inpt: str):
-        inpt = round(float(inpt.lower().replace("kg", "").strip()), 3)
-        if inpt >= 0.001:
-            return redirect("cart", added=self.product.id)
-        self.print("Invalid value!")
+    # async def handle(self, inpt: str):
+    #     inpt = round(float(inpt.lower().replace("kg", "").strip()), 3)
+    #     if inpt >= 0.001:
+    #         return redirect("cart", added=self.product.id)
+    #     self.print("Invalid value!")
 
     async def render(self):
         cart = self.get_cart_products()

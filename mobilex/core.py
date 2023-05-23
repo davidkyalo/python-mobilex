@@ -5,7 +5,7 @@ from functools import cached_property
 
 from mobilex.utils.types import FrozenNamespaceDict
 
-from .router import UssdRouter
+from .router import Router
 from .sessions import History, Session, SessionManager
 from .utils import ArgumentVector, to_timedelta
 
@@ -79,7 +79,7 @@ class Request:
 
 
 class App:
-    router: UssdRouter
+    router: Router
     session_manager: "SessionManager"
     name: t.Final[str]
     _initial_config: dict[str, t.Any]

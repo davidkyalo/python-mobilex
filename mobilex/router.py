@@ -5,7 +5,7 @@ from collections import defaultdict
 
 from .const import ResponseType
 from .response import RedirectResponse, Response
-from .screens import CON, END
+from .screens import CON, END, Screen
 from .screens.registry import ScreenRegistry
 from .utils import ArgumentVector
 
@@ -15,7 +15,7 @@ if t.TYPE_CHECKING:
     from . import App, Request, Response
 
 
-class UssdRouter:
+class Router:
     parent: "App"
 
     def __init__(self, name):
@@ -117,7 +117,7 @@ class UssdRouter:
         cls = screen._state_class
         return cls(name)
 
-    def create_screen(self, state, request: "Request"):
+    def create_screen(self, state, request: "Request") -> "Screen":
         cls = self.get_screen(state.screen)
         rv = cls(state)
         return rv
@@ -148,6 +148,8 @@ class UssdRouter:
         screen = self.create_screen(state, request)
 
         try:
+            if inpt is not None and not screen.state.get("__initialized__"):
+                await screen(request)
             res = await screen(request, inpt)
         except Exception as e:
             logger.exception(e)

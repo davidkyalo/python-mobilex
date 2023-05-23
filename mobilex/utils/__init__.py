@@ -47,27 +47,19 @@ class ArgumentVector(list[str]):
 
     @property
     def base_code(self):
-        if "*" in self[0]:
-            return self[0].split("*", 1)[1]
-        else:
-            return ""
+        return self[0].split("*", 1)[1] if "*" in self[0] else ""
 
     @property
     def args(self):
         return self[1:]
 
     def __sub__(self, other):
-        if not isinstance(other, ArgumentVector):
+        if not isinstance(other, ArgumentVector):  # pragma: no cover
             return NotImplemented
 
         ld = len(self) - len(other)
 
         return self[-ld:] if ld > 0 and self[:-ld] == other else []
-
-    # def __getitem__(self, key):
-    # 	if isinstance(key, slice):
-    # 		return self.__class__(super().__getitem__(key))
-    # 	return super().__getitem__(key)
 
     def __str__(self):
         return "%s" % "*".join(self)
