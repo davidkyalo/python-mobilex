@@ -1,4 +1,5 @@
 import re
+import sys
 import typing as t
 from collections import ChainMap, UserString, abc
 from copy import copy
@@ -29,6 +30,8 @@ _AT = t.TypeVar("_AT", bound="Action")
 CON = "CON"
 
 END = "END"
+
+NL = "\r\n" if sys.platform == "win32" else "\n"
 
 
 class ScreenMetaOptions:
@@ -61,22 +64,22 @@ class ScreenType(type):
 class UssdPayload(UserString):
     __slots__ = ()
 
-    def append(self, *objs, sep=" ", end="\n"):
+    def append(self, *objs, sep=" ", end=NL):
         self.data += f"{sep.join((str(s) for s in objs))}{end}"
 
     def paginate(self, page_size, next_page_choice, prev_page_choice, foot=""):
         if isinstance(foot, (list, tuple, ActionSet)):
             # foot_list = None  # foot[:1]+[str(next_page_choice), ]+foot[1:]
-            foot = "\n".join(map(str, foot))
+            foot = NL.join(map(str, foot))
         # else:
         #     foot_list = None
 
-        foot = foot and "\n%s" % foot
+        foot = foot and f"{NL}{foot}"
         lfoot = len(foot)
         if len(self.data.strip()) + lfoot <= page_size:
             yield self.data.strip() + foot
         else:
-            lnext, lprev = len(str(next_page_choice)) + len("\n"), len(
+            lnext, lprev = len(str(next_page_choice)) + len(NL), len(
                 str(prev_page_choice)
             )
             lnav = lnext + lprev
@@ -84,24 +87,24 @@ class UssdPayload(UserString):
             while chunk:
                 lc = len(chunk)
                 if i > 0 and lc <= lprev + page_size:
-                    yield "%s\n%s" % (chunk, prev_page_choice)
+                    yield f"{chunk}{NL}{prev_page_choice}"
                     chunk = None
                 else:
                     yv = re.sub(
-                        r"([\n]+[^\n]+[\n]*)$",
+                        rf"([{NL}]+[^{NL}]+[{NL}]*)$",
                         "",
                         chunk[
                             : (page_size - lnav if i > 0 else page_size - lfoot - lnext)
                         ],
                     ).strip()
                     if i > 0:
-                        yield "%s\n%s\n%s" % (yv, prev_page_choice, next_page_choice)
+                        yield f"{yv}{NL}{prev_page_choice}{NL}{next_page_choice}"
                     else:
                         # if foot_list:
                         #     yield "%s\n%s" % (yv, "\n".join(foot_list))
                         # else:
                         #     yield "%s\n%s\n%s" % (yv, next_page_choice, foot)
-                        yield "%s\n%s\n%s" % (yv, next_page_choice, foot)
+                        yield f"{yv}{NL}{next_page_choice}{NL}{foot}"
 
                     chunk = chunk[len(yv) + 1 :].strip()
                 i += 1
@@ -246,7 +249,7 @@ class Screen(t.Generic[T], metaclass=ScreenType):
         self.payload = self._payload_class("")
 
     @t.overload
-    def print(self, *objs, sep=" ", end="\n"):
+    def print(self, *objs, sep=" ", end=NL):
         ...
 
     @property
@@ -372,7 +375,7 @@ class Screen(t.Generic[T], metaclass=ScreenType):
 
             if rv in (self.CON, self.END):
                 payload = self.payload
-                acts and payload.append(*acts, sep="\n")
+                acts and payload.append(*acts, sep=NL)
                 nav_acts = [] if rv == self.END else nav_acts
                 mx_page_len = request.app.config.max_page_length - 4
                 pages = list(payload.paginate(mx_page_len, next, prev, nav_acts))

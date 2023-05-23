@@ -1,5 +1,8 @@
+import sys
 from dataclasses import dataclass, field
 from random import choice
+
+NL = "\r\n" if sys.platform == "win32" else "\n"
 
 
 @dataclass(frozen=True)
@@ -7,7 +10,7 @@ class Product:
     id: int
     name: str
     price: int
-    description: str = "\n".join(
+    description: str = NL.join(
         (
             "Discover a captivating fruit ",
             "with radiant, translucent allure,",
