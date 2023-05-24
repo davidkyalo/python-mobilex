@@ -13,15 +13,11 @@ from starlette.responses import PlainTextResponse
 from mobilex import App
 from mobilex import Request as UssdRequest
 
-from .shopping_cart.screens import router
+from .shopping_cart.screens import app
 
 api = FastAPI(debug=True)
-
-app = App()
-app.include_router(router)
-app.setup()
 
 
 @api.get("/ussd/", response_class=PlainTextResponse)
 async def entry(request: UssdRequest = Depends()):
-    return await app.adispatch(request)
+    return await app(request)

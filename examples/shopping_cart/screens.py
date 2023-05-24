@@ -1,16 +1,15 @@
 import typing as t
 
-from mobilex import Request
-from mobilex.response import redirect
-from mobilex.router import Router
+from mobilex import App, Request
+from mobilex.responses import redirect
 from mobilex.screens import Action, Screen
 
 from .models import Cart, CartItem, Product, all_products, get_product
 
-router = Router(f"shopping_cart")
+app = App(f"shopping_cart")
 
 
-@router.start_screen("home")
+@app.entry_screen("home")
 class HomeScreen(Screen):
     actions = [
         Action("Catalog", screen="catalog"),
@@ -27,7 +26,7 @@ class HomeScreen(Screen):
         self.print(f"Welcome to Fruit Bar.")
 
 
-@router.screen("catalog")
+@app.screen("catalog")
 class CatalogScreen(Screen):
     def get_actions(self):
         if not (menu := self.state.get("product_menu")):
@@ -47,7 +46,7 @@ class CatalogScreen(Screen):
         self.print(f"Select a product.")
 
 
-@router.screen("product")
+@app.screen("product")
 class ProductScreen(Screen):
     nav_actions = [
         Action("Add to Cart", "add_to_cart"),
@@ -71,7 +70,7 @@ class ProductScreen(Screen):
         return self.CON
 
 
-@router.screen("add_to_cart")
+@app.screen("add_to_cart")
 class AddToCartScreen(Screen):
     @property
     def product(self):
@@ -95,7 +94,7 @@ class AddToCartScreen(Screen):
         return self.CON
 
 
-@router.screen("cart")
+@app.screen("cart")
 class CartScreen(Screen):
     actions = [
         Action("Checkout", screen="checkout"),
@@ -126,7 +125,7 @@ class CartScreen(Screen):
         return self.CON
 
 
-@router.screen("checkout")
+@app.screen("checkout")
 class CheckoutScreen(Screen):
     actions = [
         Action("Checkout", screen="checkout"),

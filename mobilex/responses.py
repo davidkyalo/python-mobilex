@@ -1,11 +1,8 @@
 import typing as t
-
-
 from collections import ChainMap
 from typing import Any
 
 from .const import ResponseType
-
 
 if t.TYPE_CHECKING:
     from . import Request
@@ -44,21 +41,21 @@ class Response(metaclass=_ResponseMeta):
         self.type = type or self.__class__.type
         self.ctx = ChainMap() if ctx is None else ChainMap({}, ctx)
 
-    def get_context(self, request, ctx: t.Optional[t.Mapping] = None):
-        return self.ctx.new(ctx)
+    # def get_context(self, request, ctx: t.Optional[t.Mapping] = None):
+    #     return self.ctx.new(ctx)
 
-    async def render_content(self, request, ctx: t.Optional[t.Mapping] = None):
-        return f"{self.type} {self.content}"
+    # async def render_content(self, request, ctx: t.Optional[t.Mapping] = None):
+    #     return f"{self.type} {self.content}"
 
     def __getstate__(self):
         return {n: getattr(self, n) for n in self.__state_attrs__}
 
-    def __setstate__(self, state):
-        for k, v in state.items():
-            setattr(self, k, v)
+    # def __setstate__(self, state):
+    #     for k, v in state.items():
+    #         setattr(self, k, v)
 
-    async def __call__(self, request, ctx: t.Optional[t.Mapping] = None):
-        return await self.render_content(request, ctx)
+    # async def __call__(self, request, ctx: t.Optional[t.Mapping] = None):
+    #     return await self.render_content(request, ctx)
 
 
 R_to = t.TypeVar("R_to", str, int)

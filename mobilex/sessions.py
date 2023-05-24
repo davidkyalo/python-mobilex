@@ -196,7 +196,6 @@ class History:
         return len(self.stack)
 
     async def pop(self, k: int = None):
-        # k is None and (k := -1)
         k = -1 if k is None else k + 1 if k > -1 else k
         stack = self.stack
         stack[k:] = []
