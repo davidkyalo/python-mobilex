@@ -6,12 +6,13 @@ from functools import cached_property
 from mobilex.utils.types import FrozenNamespaceDict
 
 from .router import Router
+from .screens import Screen
 from .sessions import History, Session, SessionManager
 from .utils import ArgumentVector, to_timedelta
 
 if t.TYPE_CHECKING:
     from .cache.base import BaseCache
-    from .response import Response
+    from .responses import Response
 
 
 class ConfigDict(t.TypedDict, total=False):
@@ -79,14 +80,14 @@ class Request:
 
 
 class App:
-    router: Router
-    session_manager: "SessionManager"
+    router: t.Final[Router]
     name: t.Final[str]
-    _initial_config: dict[str, t.Any]
+    _initial_config: t.Final[dict[str, t.Any]]
 
-    def __init__(self, name: str = None, **config):
+    def __init__(self, name: str = None, router: Router = None, **config):
         self.name = "mobilex.app" if name is None else name
         self.has_booted = False
+        self.router = router or Router()
         self._initial_config = self.get_default_config().copy()
         config and self.configure(config)
 
@@ -143,18 +144,18 @@ class App:
             history_ttl=None,
         )
 
-    def setup(self):
-        assert (
-            not self.has_booted
-        ), f"{type(self).__name__}.boot() called multiple times."
+    # def setup(self):
+    #     assert (
+    #         not self.has_booted
+    #     ), f"{type(self).__name__}.boot() called multiple times."
 
-        self.config
-        self.router.run_embeded(self)
-        self.has_booted = True
-        return self
+    #     self.config
+    #     # self.router.run_embeded(self)
+    #     self.has_booted = True
+    #     return self
 
-    def include_router(self, router, name: t.Optional[str] = None):
-        self.router = router
+    # def include_router(self, router, name: t.Optional[str] = None):
+    #     self.router = router
 
     async def close_session(self, request: Request, response: "Response"):
         await self.session_manager.close(request, response)
@@ -170,3 +171,12 @@ class App:
         await self.prepare_request(request)
         response = await self.router(request)
         return await self.teardown_request(request, response) or response
+
+    def screen(self, name: str, screen: type["Screen"] = None, **kwds):
+        return self.router.screen(name, screen, **kwds)
+
+    def entry_screen(self, name: str, screen: type[Screen] = None):
+        return self.router.entry_screen(name, screen)
+
+    def home_screen(self, name: str, screen: type[Screen] = None):
+        return self.router.home_screen(name, screen)

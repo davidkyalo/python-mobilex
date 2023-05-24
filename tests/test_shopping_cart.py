@@ -5,8 +5,8 @@ from mobilex import App, Request
 
 
 @pytest.fixture
-def router():
-    return screens.router
+def app(app):
+    return screens.app
 
 
 async def test_basic(app: App):

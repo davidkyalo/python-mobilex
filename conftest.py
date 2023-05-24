@@ -24,14 +24,6 @@ def fake_redis(request: pytest.FixtureRequest):
 
 
 @pytest.fixture
-def router():
-    from mobilex import Router
-
-    router = Router("test")
-    yield router
-
-
-@pytest.fixture
 def app_config(request: pytest.FixtureRequest):
     res, vars = {}, [
         "max_page_length",
@@ -54,16 +46,19 @@ def app_config(request: pytest.FixtureRequest):
 
 
 @pytest.fixture
-async def app(router, app_config: dict):
+async def app(app_config: dict):
     from mobilex import App
 
-    app = App(**app_config)
-    app.configure()
-    if router:
-        app.include_router(router), app.setup()
+    app = App()
+    app.configure(app_config)
 
     yield app
 
     for back in (app.session_backend, app.history_backend):
         for key in await back.keys():
             await back.delete(key)
+
+
+@pytest.fixture
+def router(app):
+    yield app.router

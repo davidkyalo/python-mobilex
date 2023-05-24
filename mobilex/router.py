@@ -2,8 +2,9 @@ import logging
 import typing as t
 
 from .const import ResponseType
-from .response import RedirectResponse, Response
-from .screens import CON, END, Screen
+from .exc import ScreenNotFoundError
+from .responses import RedirectResponse, Response
+from .screens import CON, END, Screen, ScreenState
 from .utils import ArgumentVector
 
 logger = logging.getLogger(__name__)
@@ -13,101 +14,80 @@ if t.TYPE_CHECKING:
 
 
 class Router:
-    parent: "App"
-
-    def __init__(self, name):
+    def __init__(self, name: str = None):
         self.name = name
         self._registry = {}
-        self._start_screen = None
+        self._entry_screen_name = self._home_screen_name = None
 
-    @property
-    def _home_screen(self):
+    # @property
+    # def _home_screen_name(self):
+    #     try:
+    #         return self.__dict__["_home_screen_name"]
+    #     except KeyError:
+    #         return self._entry_screen_name
+
+    # @_home_screen_name.setter
+    # def _home_screen_name(self, value):
+    #     self.__dict__["_home_screen_name"] = value
+
+    def screen(
+        self,
+        name: str,
+        screen: type[Screen] = None,
+        *,
+        entry: bool = None,
+        home: bool = None,
+    ):
+        def decorator(scr):
+            self._registry[name] = scr
+            if home:
+                self._home_screen_name = name
+            if entry:
+                self._entry_screen_name = name
+            return scr
+
+        return decorator if screen is None else decorator(screen)
+
+    def entry_screen(self, name: str, screen: type[Screen] = None):
+        return self.screen(name, screen, entry=True)
+
+    def home_screen(self, name: str, screen: type[Screen] = None):
+        return self.screen(name, screen, home=True)
+
+    def get_screen(self, name: str):
         try:
-            return self.__dict__["_home_screen"]
+            return self._registry[name]
         except KeyError:
-            return self._start_screen
+            raise ScreenNotFoundError(name=name)
 
-    @_home_screen.setter
-    def _home_screen(self, value):
-        self.__dict__["_home_screen"] = value
+    def get_entry_screen(self, *, with_name=False):
+        screen = self.get_screen(name := self._entry_screen_name)
+        return (name, screen) if with_name else screen
 
-    def run_embeded(self, parent):
-        self.parent = parent
+    def get_home_screen(self, *, with_name=False):
+        name = self._home_screen_name or self._entry_screen_name
+        screen = self.get_screen(name)
+        return (name, screen) if with_name else screen
 
-    def screen(self, name: str):
-        def decorator(screen):
-            nonlocal name, self
-            self.register_screen(name, screen)
-            return screen
+    # def abs_screen_name(self, name: str):
+    #     return name if name[:1] == "/" else f"/{self.name}/{name}"
 
-        return decorator
+    # def eval_argv(self, request: "Request") -> "Response":
+    #     session = request.session
+    #     argv = ArgumentVector(
+    #         service_code=request.service_code,
+    #         argstr=request.ussd_string,
+    #         base_code=request.initial_code,
+    #     )
 
-    def register_screen(self, name: str, screen: t.Any):
-        self._registry[name] = screen
-        return screen
+    #     if session.is_stale or not (oldargv := session.argv):
+    #         request.args = argv.args
+    #     else:
+    #         request.args = argv - oldargv
 
-    def start_screen(self, name: str):
-        def decorator(screen):
-            nonlocal name, self
-            self.register_start_screen(name, screen)
-            return screen
+    #     session.argv = argv
 
-        return decorator
-
-    def register_start_screen(self, name: str, screen: t.Any):
-        self._start_screen = name, screen
-        return self.register_screen(name, screen)
-
-    def home_screen(self, name: str):
-        def decorator(screen):
-            nonlocal name, self
-            self.register_home_screen(name, screen)
-            return screen
-
-        return decorator
-
-    def register_home_screen(self, name: str, screen: t.Any):
-        self._home_screen = name, screen
-        return self.register_screen(name, screen)
-
-    def get_screen(self, name: str, default=...):
-        nm, key = self.name, name
-        if name.startswith(f"/{nm}/"):
-            key = name[len(nm) + 2 :]
-
-        if (rv := self._registry.get(key)) is not None:
-            return rv
-        elif default is ...:
-            raise LookupError(f"UssdScreen {name!r} not found")
-        return default
-
-    def get_start_screen(self, *, withname=False):
-        name, screen = self._start_screen
-        return (f"/{self.name}/{name}", screen) if withname else screen
-
-    def get_home_screen(self, *, withname=False):
-        name, screen = self._home_screen
-        return (f"/{self.name}/{name}", screen) if withname else screen
-
-    def abs_screen_name(self, name: str):
-        return name if name[:1] == "/" else f"/{self.name}/{name}"
-
-    def eval_argv(self, request: "Request") -> "Response":
-        session = request.session
-        argv = ArgumentVector(
-            service_code=request.service_code,
-            argstr=request.ussd_string,
-            base_code=request.initial_code,
-        )
-
-        if session.is_stale or not (oldargv := session.argv):
-            request.args = argv.args
-        else:
-            request.args = argv - oldargv
-
-        session.argv = argv
-
-    def create_new_state(self, name, screen):
+    def create_new_state(self, name, screen: type[Screen]) -> "ScreenState":
         cls = screen._state_class
         return cls(name)
 
@@ -126,45 +106,43 @@ class Router:
                 session.reset()
 
         if session.is_new:
-            name, screen = self.get_start_screen(withname=True)
-            state = session.state = self.create_new_state(name, screen)
-            inpt, args = None, request.args
-        else:
-            inpt, *args = request.args or (None,)
+            name, screen = self.get_entry_screen(with_name=True)
+            session.state = state = self.create_new_state(name, screen)
 
-        if state is None:
-            raise RuntimeError("Screen state cannot be None.")
+        # if state is None:
+        #     raise RuntimeError("Screen state cannot be None.")
 
-        rv = await self.dispatch_to_screen(request, state, inpt, *args)
+        rv = await self.dispatch_to_screen(request, state, *request.args)
         return rv
 
-    async def dispatch_to_screen(self, request: "Request", state, inpt=None, /, *args):
+    async def dispatch_to_screen(
+        self, request: "Request", state: "ScreenState", inpt=None, /, *args
+    ):
         screen = self.create_screen(state, request)
 
         try:
-            if inpt is not None and not screen.state.get("__initialized__"):
-                await screen(request)
             res = await screen(request, inpt)
-        except Exception as e:
+        except Exception as e:  # pragma: no cover
             logger.exception(e)
             raise e
 
         if isinstance(res, RedirectResponse):
             if res.type == ResponseType.POP:
-                if res.to == 0 or not (ores := await request.history.pop(res.to)):
-                    n, s = self.get_home_screen(withname=True)
-                    state = request.session.state = self.create_new_state(n, s)
+                if not (ores := await request.history.pop(res.to)):
+                    state = request.session.state = self.create_new_state(
+                        *self.get_home_screen(with_name=True)
+                    )
                     state.update(res.ctx)
                 else:
-                    n, s = ores.to, self.get_screen(ores.to)
-                    state = request.session.state = self.create_new_state(n, s)
-                    state.update(ores.ctx)
-                    state.update(res.ctx)
+                    state = request.session.state = self.create_new_state(
+                        ores.to, self.get_screen(ores.to)
+                    )
+                    state.update(ores.ctx), state.update(res.ctx)
                 return await self.dispatch_to_screen(request, state, *args)
             else:
-                n = res.to = self.abs_screen_name(res.to)
-                s = self.get_screen(n)
-                state = request.session.state = self.create_new_state(n, s)
+                state = request.session.state = self.create_new_state(
+                    res.to, self.get_screen(res.to)
+                )
                 state.update(res.ctx)
 
                 await request.history.push(res)
@@ -172,15 +150,24 @@ class Router:
                 return await self.dispatch_to_screen(request, state, *args)
 
         request.session.state = screen.state
+        assert isinstance(
+            res, (str, Response)
+        ), "Screen must return Response object or string."
+        return str(res)
 
-        if res in (CON, END):
-            return f"{res} {screen.payload}"
-        elif isinstance(res, tuple):
-            return " ".join(res)
-        elif isinstance(res, str):
-            return res
-        raise RuntimeError("Screen must return Response object or string.")
+    async def __call__(self, request):
+        session = request.session
+        argv = ArgumentVector(
+            service_code=request.service_code,
+            argstr=request.ussd_string,
+            base_code=request.initial_code,
+        )
 
-    async def __call__(self, request, *args, **kwargs):
-        self.eval_argv(request)
+        if session.is_stale or not (oldargv := session.argv):
+            request.args = argv.args
+        else:
+            request.args = argv - oldargv
+
+        session.argv = argv
+
         return await self.dispatch_request(request)

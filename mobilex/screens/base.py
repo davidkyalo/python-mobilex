@@ -9,7 +9,7 @@ from operator import attrgetter
 from typing import Any, Iterator
 
 from .. import exc
-from ..response import redirect
+from ..responses import Response, redirect
 from ..utils.types import NamespaceDict
 
 if t.TYPE_CHECKING:
@@ -126,7 +126,7 @@ class Action(t.NamedTuple):
         args, kwds = self.args or (), self.kwargs or {}
         if (to := self.screen) is not None:
             return redirect(to, *args, **kwds)
-        elif callable(func := self.handler):
+        elif callable(func := self.handler or "handle"):
             return func(screen, value, *args, **kwds)
         elif isinstance(func, str):
             return getattr(screen, func)(value, *args, **kwds)
@@ -134,8 +134,11 @@ class Action(t.NamedTuple):
     def __str__(self):
         return "" if self.key is None else f"{self.key:<2} {self.label}"
 
+    def __bool__(self):
+        return self.key is not None
 
-_null_action = Action(None)
+
+_null_act = Action(None)
 
 
 class _ActionDict(dict[str, _AT]):
@@ -144,16 +147,18 @@ class _ActionDict(dict[str, _AT]):
 
 class ActionSet(abc.Set[_AT]):
     __slots__ = ("_chain", "_src")
-
+    _src: abc.Mapping[str, _AT]
     _chain: ChainMap[str, _AT]
 
     def __new__(cls, it: abc.Iterable[_AT] = ()):
-        self, named = object.__new__(cls), None
-        if isinstance(it, ActionSet):
-            it, named = it._chain.maps
-        src = _ActionDict(it if isinstance(it, _ActionDict) else cls._parse_src(it))
-        named = {o.name: o for o in src.values()} if named is None else copy(named)
-        self._chain, self._src = ChainMap(src, named), src
+        self = object.__new__(cls)
+        self._src = _ActionDict(
+            it._src
+            if isinstance(it, ActionSet)
+            else it
+            if isinstance(it, _ActionDict)
+            else cls._parse_src(it)
+        )
         return self
 
     @classmethod
@@ -186,7 +191,7 @@ class ActionSet(abc.Set[_AT]):
         return self.__class__(_ActionDict(self._src | x._src))
 
     def __contains__(self, x: object) -> bool:
-        return self._to_key(x) in self._chain
+        return self._to_key(x) in self._src
 
     def __len__(self) -> int:
         return len(self._src)
@@ -195,19 +200,19 @@ class ActionSet(abc.Set[_AT]):
         return iter(self._src.values())
 
     def __getitem__(self, key):
-        return self._chain[self._to_key(key)]
+        return self._src[self._to_key(key)]
 
     def __reduce__(self) -> str | tuple[Any, ...]:
         return self.__class__, (self._src,)
 
     def get(self, key, default: _DT = None):
-        return self._chain.get(self._to_key(key), default)
+        return self._src.get(self._to_key(key), default)
 
     def keys(self):
         return self._src.keys()
 
-    def names(self):
-        return self._chain.maps[1].keys()
+    # def names(self):
+    #     return self._src.maps[1].keys()
 
 
 class Screen(t.Generic[T], metaclass=ScreenType):
@@ -235,14 +240,17 @@ class Screen(t.Generic[T], metaclass=ScreenType):
     actions = None
 
     nav_actions = [
-        Action("Back", key="0", screen=-1, name="back"),
-        Action("Home", key="00", screen=0, name="home"),
+        Action("Back", key="0", screen=-1),
+        Action("Home", key="00", screen=0),
     ]
 
-    pagination_actions = [
-        Action("Back", key="0", name="prev"),
-        Action("More", key="99", name="next"),
-    ]
+    # pagination_actions = [
+    #     Action("Back", key="0", name="prev"),
+    #     Action("More", key="99", name="next"),
+    # ]
+
+    next_page_action = Action("More", key="99")
+    prev_page_action = Action("Back", key="0")
 
     def __init__(self, state):
         self.state = state
@@ -259,8 +267,8 @@ class Screen(t.Generic[T], metaclass=ScreenType):
     def get_actions(self):
         return self.actions or ()
 
-    def get_pagination_actions(self):
-        return self.pagination_actions or ()
+    # def get_pagination_actions(self):
+    #     return self.pagination_actions or ()
 
     def get_nav_actions(self):
         return self.nav_actions or ()
@@ -268,25 +276,30 @@ class Screen(t.Generic[T], metaclass=ScreenType):
     def get_action_set(self):
         return ActionSet(self.get_actions())
 
-    def get_pagination_action_set(self):
-        return ActionSet(self.get_pagination_actions())
+    # def get_pagination_action_set(self):
+    #     return ActionSet(self.get_pagination_actions())
+
+    # def get_next_page_action(self):
+    #     return self.next_page_action or _null_action
+
+    # def get_prev_page_action(self):
+    #     return self.prev_page_action or _null_action
 
     def get_nav_action_set(self):
         return ActionSet(self.get_nav_actions())
 
     async def handle(self, inpt):
-        if self._has_actions:
-            self.print("Invalid choice!")
+        self._has_actions and self.print("Error! Invalid choice.")
 
     async def render(self):
-        return
+        pass
 
-    async def handle_exception(self, e, inpt=None):
-        if inpt is not None and isinstance(e, exc.ValidationError):
-            self.payload.prepend(e)
-            return await self._async_render()
-        else:
-            raise e
+    # async def handle_exception(self, e, inpt=None):
+    #     if inpt is not None and isinstance(e, exc.ValidationError):
+    #         self.payload.prepend(e)
+    #         return await self._async_render()
+    #     else:
+    #         raise e
 
     async def _async_init(self, inpt=None):
         rv = self.init(inpt)
@@ -300,17 +313,17 @@ class Screen(t.Generic[T], metaclass=ScreenType):
             rv = await rv
         return rv
 
-    async def _async_handle(self, inpt):
-        rv = self.handle(inpt)
-        if isawaitable(rv):
-            rv = await rv
-        return rv
+    # async def _async_handle(self, inpt):
+    #     rv = self.handle(inpt)
+    #     if isawaitable(rv):
+    #         rv = await rv
+    #     return rv
 
-    async def _async_validate(self, inpt):
-        rv = self.validate(inpt)
-        if isawaitable(rv):
-            rv = await rv
-        return rv
+    # async def _async_validate(self, inpt):
+    #     rv = self.validate(inpt)
+    #     if isawaitable(rv):
+    #         rv = await rv
+    #     return rv
 
     async def _async_handle_exception(self, e, inpt=None):
         rv = self.handle_exception(e, inpt)
@@ -321,67 +334,50 @@ class Screen(t.Generic[T], metaclass=ScreenType):
     def abort(self, *args, **kwargs):
         raise exc.ValidationError(*args, **kwargs)
 
-    async def __call__(self, request: "Request", input=None):
+    async def __call__(self, request: "Request", input: str = None):
         self.request = request
         rv, pages, i = None, self.state.get("_pages", []), 0
         current_page = self.state.get("_current_page", 0)
         key = input if input is None else f"{input}".strip()
 
-        # actions = self.get_action_set()
-        # if current_page == 0 and key is not None and key in actions:
-        #     if (rv := actions[key].handle(self, key)) is not None:
-        #         return rv
-        #     input = key = None
+        if not (was_ready := self.state.get("__initialized__")):
+            if self.init is not None:
+                rv = await self._async_init(input)
+            self.state.__initialized__ = True
 
-        pg_acts = self.get_pagination_action_set()
-        next, prev = (pg_acts.get(k, _null_action) for k in ("next", "prev"))
-
-        if key is not None and len(pages) > 1 and key in pg_acts:
-            if key == prev.key and current_page > 0:
-                self.state._current_page = i = current_page - 1
-                rv = self.state._action
-            elif key == next.key and current_page < len(pages) - 1:
+        next, prev = self.next_page_action, self.prev_page_action
+        if is_next := key and key == next.key:
+            if current_page < len(pages) - 1:
                 self.state._current_page = i = current_page + 1
                 rv = self.state._action
+        elif key == prev.key and current_page > 0:
+            self.state._current_page = i = current_page - 1
+            rv = self.state._action
 
         if rv is None:
-            try:
-                if not self.state.get("__initialized__"):
-                    if self.init is not None:
-                        rv = await self._async_init(input)
-                    self.state.__initialized__ = True
+            acts, nav_acts = self.get_action_set(), self.get_nav_action_set()
+            self._has_actions = not not acts
+            if not (key is None or is_next):
+                act = acts.get(key) or nav_acts.get(key) or _null_act
+                if isawaitable(rv := act.handle(self, input)):
+                    rv = await rv
 
-                # ACTIONS HERE
-                acts, nav_acts = self.get_action_set(), self.get_nav_action_set()
-                self._has_actions = not not acts
+            if rv is None:
+                if isawaitable(rv := self.render()):
+                    rv = await rv
 
-                if key is not None:
-                    if act := acts.get(key) or nav_acts.get(key):
-                        rv = act.handle(self, key)
-
-                if rv is None and input is not None:
-                    if self.validate is not None:
-                        input = await self._async_validate(input)
-
-                    if input is not None:
-                        rv = await self._async_handle(input)
-
-                rv is None and (rv := await self._async_render())
-            except Exception as e:
-                rv = await self._async_handle_exception(e, input)
+            if isinstance(rv, Response):
+                return rv
 
             if rv is None:
                 rv = self.exit_code
 
-            if rv in (self.CON, self.END):
-                payload = self.payload
-                acts and payload.append(*acts, sep=NL)
-                nav_acts = [] if rv == self.END else nav_acts
-                mx_page_len = request.app.config.max_page_length - 4
-                pages = list(payload.paginate(mx_page_len, next, prev, nav_acts))
-                self.state._action, self.state._pages = rv, pages
-                self.state._current_page = i = 0
-            else:
-                return rv
+            payload = self.payload
+            acts and payload.append(*acts, sep=NL)
+            nav_acts = [] if rv == self.END else nav_acts
+            mx_page_len = request.app.config.max_page_length - 4
+            pages = list(payload.paginate(mx_page_len, next, prev, nav_acts))
+            self.state._action, self.state._pages = rv, pages
+            self.state._current_page = i = 1 if is_next and len(pages) > 1 else 0
 
-        return rv, pages[i]
+        return f"{rv} {pages[i]}"

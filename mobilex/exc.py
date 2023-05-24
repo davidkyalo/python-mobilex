@@ -44,3 +44,9 @@ class InputError(ValidationError):
 class InvalidChoiceError(ValidationError):
     default_code = "invalid_choice"
     default_message = "Error! Invalid choice"
+
+
+class ScreenNotFoundError(LookupError):
+    def __init__(self, *args, name: str = None) -> None:
+        super().__init__(*(args if args else (repr(name),) if name else ()))
+        self.name = name
