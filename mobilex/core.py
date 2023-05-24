@@ -166,7 +166,7 @@ class App:
     async def teardown_request(self, request, response):
         await self.close_session(request, response)
 
-    async def adispatch(self, request, *args, **kwargs):
+    async def __call__(self, request, *args, **kwargs):
         await self.prepare_request(request)
         response = await self.router(request)
         return await self.teardown_request(request, response) or response

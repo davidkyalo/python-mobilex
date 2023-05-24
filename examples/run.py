@@ -24,4 +24,4 @@ app.setup()
 
 @api.get("/ussd/", response_class=PlainTextResponse)
 async def entry(request: UssdRequest = Depends()):
-    return await app.adispatch(request)
+    return await app(request)

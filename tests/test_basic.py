@@ -28,12 +28,12 @@ async def test_basic(app: App, router: Router, session_backend_config):
             return CON
 
     req_0 = Request("123456")
-    res_0: str = await app.adispatch(req_0)
+    res_0: str = await app(req_0)
     assert res_0.startswith(f"{CON} Hello world")
 
     val = "xyz"
     req_1 = Request(f"123456", ussd_string="xyz")
-    res_1: str = await app.adispatch(req_1)
+    res_1: str = await app(req_1)
     assert res_1.startswith(f"{END} Your value was {val}")
 
     mk = Mock()
